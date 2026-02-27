@@ -30,13 +30,57 @@ export async function getThemeCSS(series: string): Promise<string> {
 }
 
 /**
+ * CSS media query that enables scrolling when the HTML is opened
+ * in a normal browser (viewport smaller than the 1080x1440 canvas).
+ * Puppeteer renders at exactly 1080x1440, so this does NOT activate
+ * during PNG export.
+ */
+const BROWSER_PREVIEW_CSS = `
+/* Browser preview: enable scrolling in normal browser windows */
+@media (max-width: 1079px), (max-height: 1439px) {
+  html, body {
+    overflow: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100vh;
+  }
+  .card {
+    margin: 0 auto;
+    overflow: visible !important;
+  }
+}`;
+
+/**
+ * Inject browser-preview CSS into a complete HTML document.
+ * Inserts before the closing </style> or </head> tag.
+ */
+function injectPreviewCSS(html: string): string {
+  // Try inserting before the last </style> tag
+  const styleCloseIdx = html.lastIndexOf("</style>");
+  if (styleCloseIdx !== -1) {
+    return `${html.slice(0, styleCloseIdx)}${BROWSER_PREVIEW_CSS}\n${html.slice(styleCloseIdx)}`;
+  }
+  // Fallback: insert before </head>
+  const headCloseIdx = html.indexOf("</head>");
+  if (headCloseIdx !== -1) {
+    return (
+      html.slice(0, headCloseIdx) +
+      `<style>${BROWSER_PREVIEW_CSS}\n</style>\n` +
+      html.slice(headCloseIdx)
+    );
+  }
+  // Last resort: return as-is
+  return html;
+}
+
+/**
  * Assembles a complete standalone HTML document for a slide.
  * Merges design tokens + base styles + theme + slide-specific CSS + content.
  */
 export async function buildSlideHtml(slideHtml: string, series: string): Promise<string> {
   // If the HTML already has <!DOCTYPE, assume it's already complete
   if (slideHtml.trim().startsWith("<!DOCTYPE") || slideHtml.trim().startsWith("<html")) {
-    return slideHtml;
+    return injectPreviewCSS(slideHtml);
   }
 
   // Otherwise, wrap the content in a complete HTML document

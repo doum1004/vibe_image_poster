@@ -151,3 +151,21 @@ strong {
 .rounded-md { border-radius: var(--radius-md); }
 .rounded-lg { border-radius: var(--radius-lg); }
 .rounded-xl { border-radius: var(--radius-xl); }
+
+/* ─── Browser Preview ─────────────────────────── */
+/* Enable scrolling when viewed in a normal browser window.
+   Puppeteer renders at exactly 1080x1440, so this media query
+   does NOT activate during PNG export. */
+
+@media (max-width: 1079px), (max-height: 1439px) {
+  html, body {
+    overflow: auto;
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+  }
+  .card {
+    margin: 0 auto;
+    overflow: visible;
+  }
+}

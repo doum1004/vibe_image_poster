@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 /**
@@ -24,6 +24,12 @@ export async function writeBinaryFile(
   content: Buffer | Uint8Array,
 ): Promise<void> {
   await ensureDir(dirname(filePath));
+  // Delete existing file first to guarantee a clean overwrite
+  try {
+    await unlink(filePath);
+  } catch {
+    // File doesn't exist — nothing to remove
+  }
   await writeFile(filePath, content);
 }
 
