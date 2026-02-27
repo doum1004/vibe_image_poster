@@ -1,0 +1,33 @@
+{
+  "name": "vibe-image-poster",
+  "version": "0.1.0",
+  "description": "CLI tool to generate Instagram card news (1080x1440px) using AI-powered 5-agent pipeline",
+  "type": "module",
+  "bin": {
+    "vibe-poster": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ./src ./tests",
+    "lint:fix": "biome check --write ./src ./tests",
+    "format": "biome format ./src ./tests",
+    "format:fix": "biome format --write ./src ./tests"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/generative-ai": "^0.24.1",
+    "commander": "^13.1.0",
+    "openai": "^6.25.0",
+    "picocolors": "^1.1.1",
+    "puppeteer-core": "^24.4.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.4",
+    "@types/bun": "^1.2.4",
+    "typescript": "^5.7.3"
+  }
+}

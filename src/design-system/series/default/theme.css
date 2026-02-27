@@ -1,0 +1,6 @@
+/* default series theme — no overrides, uses shared tokens as-is */
+
+:root {
+  /* This is the default theme — all tokens come from shared/design-tokens.css */
+  /* Override tokens here to customize the default series */
+}

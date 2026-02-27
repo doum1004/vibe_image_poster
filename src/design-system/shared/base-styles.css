@@ -1,0 +1,153 @@
+/* ═══════════════════════════════════════════════════════════════
+   Base Styles — Applied to every slide HTML
+   Reset + Typography + Korean text rules + Canvas constraints
+   ═══════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* ─── Card Container ──────────────────────────── */
+
+.card {
+  position: relative;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-content {
+  flex: 1;
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Typography Hierarchy ────────────────────── */
+
+.text-hero {
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-black);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+}
+
+.text-title {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+}
+
+.text-subtitle {
+  font-size: var(--fs-subtitle);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+}
+
+.text-body {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+}
+
+.text-body-sm {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+}
+
+.text-caption {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-normal);
+  color: var(--color-text-secondary);
+}
+
+/* ─── Emphasis Rules ──────────────────────────── */
+/* Max 2 accent per slide, max 1 strong per slide */
+
+.accent {
+  color: var(--color-accent);
+  font-weight: var(--fw-semibold);
+}
+
+strong {
+  font-weight: var(--fw-bold);
+}
+
+/* ─── Bottom Bar ──────────────────────────────── */
+
+.bottom-bar {
+  width: 100%;
+  height: var(--bar-height);
+  background-color: var(--bar-bg);
+  color: var(--bar-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--bar-fs);
+  font-weight: var(--fw-medium);
+  flex-shrink: 0;
+}
+
+/* ─── Utility Classes ─────────────────────────── */
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.gap-sm { gap: var(--space-sm); }
+.gap-md { gap: var(--space-md); }
+.gap-lg { gap: var(--space-lg); }
+
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+
+.color-primary { color: var(--color-primary); }
+.color-secondary { color: var(--color-secondary); }
+.color-accent { color: var(--color-accent); }
+.color-muted { color: var(--color-text-secondary); }
+.color-inverse { color: var(--color-text-inverse); }
+
+.bg-primary { background-color: var(--color-primary); }
+.bg-secondary { background-color: var(--color-secondary); }
+.bg-alt { background-color: var(--color-bg-alt); }
+.bg-block { background-color: var(--color-bg-block); }
+.bg-dark { background-color: var(--gray-900); color: var(--white); }
+
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
