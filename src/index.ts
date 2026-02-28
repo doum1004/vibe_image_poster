@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
+import { reRender } from "./commands/re-render.js";
+import { reuse } from "./commands/reuse.js";
 import { createSeries, listSeries } from "./commands/series.js";
 import { loadConfig } from "./config.js";
 import { runPipeline } from "./pipeline/orchestrator.js";
@@ -77,5 +79,46 @@ program
         await createSeries(name);
       }),
   );
+
+program
+  .command("re-render")
+  .description("Re-render slides from updated copy.json without running AI pipeline")
+  .argument("<dir>", "Output directory containing copy.json and slides/")
+  .action(async (dir: string) => {
+    try {
+      loadConfig();
+      await reRender(dir);
+    } catch (err) {
+      log.error("Re-render failed", err instanceof Error ? err : undefined);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("reuse")
+  .description("Reuse existing HTML templates with new copy content (creates new output dir)")
+  .argument("<dir>", "Source directory containing slides/ templates")
+  .argument("[copyFile]", "Path to a user-provided copy.json file")
+  .option("-t, --topic <topic>", "New topic for AI research (used when no copyFile)")
+  .option("-i, --input <file>", "Input markdown file for AI research")
+  .option("-o, --output <dir>", "Base output directory for the new folder", "./output")
+  .option(
+    "-m, --model <alias>",
+    "LLM model alias or ID (e.g., claude-sonnet-4, gpt-4o, gemini-2.5-pro)",
+  )
+  .action(async (dir: string, copyFile: string | undefined, opts) => {
+    try {
+      loadConfig();
+      await reuse(dir, copyFile, {
+        topic: opts.topic,
+        input: opts.input,
+        model: opts.model,
+        output: opts.output,
+      });
+    } catch (err) {
+      log.error("Reuse failed", err instanceof Error ? err : undefined);
+      process.exit(1);
+    }
+  });
 
 program.parse();

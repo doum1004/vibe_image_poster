@@ -28,7 +28,7 @@ describe("slugify", () => {
 describe("getOutputDir", () => {
   it("creates dated output path with slug", () => {
     const dir = getOutputDir("./output", "Test Topic");
-    expect(dir).toMatch(/output[\\/]\d{4}-\d{2}-\d{2}_test-topic/);
+    expect(dir).toMatch(/output[\\/]\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_test-topic/);
   });
 
   it("handles Korean topics", () => {

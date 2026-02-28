@@ -148,6 +148,37 @@ export const DesignBriefOutput = z.object({
 });
 export type DesignBriefOutput = z.infer<typeof DesignBriefOutput>;
 
+// ─── Developer Output ──────────────────────────────────────────────────
+
+export const DeveloperSlide = z.object({
+  slideNumber: z.number().int().min(1),
+  html: z.string(),
+});
+export type DeveloperSlide = z.infer<typeof DeveloperSlide>;
+
+export const DeveloperOutput = z.object({
+  slides: z.array(DeveloperSlide),
+});
+export type DeveloperOutput = z.infer<typeof DeveloperOutput>;
+
+// ─── Auto-Validation Result ────────────────────────────────────────────
+
+export interface AutoValidationResult {
+  reports: Array<{
+    slideNumber: number;
+    results: Array<{
+      rule: string;
+      severity: "high" | "medium" | "low";
+      passed: boolean;
+      detail?: string;
+    }>;
+  }>;
+  allPassed: boolean;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+}
+
 // ─── QA Report ─────────────────────────────────────────────────────────
 
 export const IssueSeverity = z.enum(["high", "medium", "low"]);

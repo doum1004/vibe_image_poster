@@ -97,6 +97,7 @@ export async function listDirs(dirPath: string): Promise<string[]> {
  */
 export function getOutputDir(baseOutput: string, topic: string): string {
   const slug = slugify(topic);
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const iso = new Date().toISOString();
+  const timestamp = `${iso.slice(0, 10)}_${iso.slice(11, 19).replace(/:/g, "-")}`;
   return join(baseOutput, `${timestamp}_${slug}`);
 }

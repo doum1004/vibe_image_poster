@@ -1,4 +1,5 @@
 import type {
+  AutoValidationResult,
   CopyOutput,
   DesignBriefOutput,
   PipelineOptions,
@@ -23,6 +24,7 @@ export class PipelineContext {
   pngPaths: Map<number, string> = new Map();
   qaReport: QAReport | null = null;
   qaIteration = 0;
+  autoValidation: AutoValidationResult | null = null;
 
   // Raw research content (if user provides a .md file)
   rawResearchContent: string | null = null;

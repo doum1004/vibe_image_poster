@@ -128,7 +128,8 @@ export async function runPipeline(options: PipelineOptions): Promise<void> {
 
     // ─── Auto Validation ─────────────────────────────────────────
     log.step("Auto Validation");
-    const _validation = validateAllSlides(ctx.htmlSlides);
+    const validation = validateAllSlides(ctx.htmlSlides);
+    ctx.autoValidation = validation;
 
     // ─── Stage 6: QA Review + Fix Loop ───────────────────────────
     log.step("Stage 6/6: QA Review");
@@ -161,7 +162,7 @@ export async function runPipeline(options: PipelineOptions): Promise<void> {
       );
 
       if (qaLoops < config.maxQaLoops) {
-        // Re-run developer with QA feedback
+        // Re-run developer with QA feedback (developer reads ctx.qaReport + ctx.autoValidation)
         log.step("Developer fix pass");
         const fixResult = await runDeveloperFix(ctx, developer, pipelineModel);
         totalTokens.input += fixResult.tokensUsed.input;
@@ -175,6 +176,11 @@ export async function runPipeline(options: PipelineOptions): Promise<void> {
           await writeOutputFile(`${slidesDir}/slide-${padded}.html`, html);
         }
         log.success("Fixes applied");
+
+        // Re-run auto-validation on fixed slides
+        log.step("Re-validating fixed slides");
+        const revalidation = validateAllSlides(ctx.htmlSlides);
+        ctx.autoValidation = revalidation;
       }
     }
 
@@ -207,14 +213,17 @@ export async function runPipeline(options: PipelineOptions): Promise<void> {
 
 /**
  * Run the developer agent in "fix" mode with QA feedback.
+ * The developer's buildUserMessage() reads ctx.qaReport and ctx.autoValidation
+ * to include feedback in the prompt, so the LLM knows what to fix.
  */
 async function runDeveloperFix(
   ctx: PipelineContext,
   developer: DeveloperAgent,
   pipelineModel?: string,
 ) {
-  // Inject QA feedback into context for the developer's next run
-  // The developer will see the issues and fix them
+  // Inject QA feedback into context for the developer's next run.
+  // The developer's buildUserMessage() reads ctx.qaReport and ctx.autoValidation
+  // to append issue details to the prompt.
   return developer.run(ctx, pipelineModel);
 }
 
