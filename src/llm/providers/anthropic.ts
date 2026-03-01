@@ -18,7 +18,9 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async chat(request: LLMRequest): Promise<LLMResponse> {
-    const response = await this.client.messages.create({
+    // Use streaming to avoid the Anthropic SDK's non-streaming timeout limit,
+    // which rejects requests for models with large max_tokens values.
+    const stream = this.client.messages.stream({
       model: request.model,
       max_tokens: request.maxTokens,
       system: request.system,
@@ -27,6 +29,8 @@ export class AnthropicProvider implements LLMProvider {
         content: m.content,
       })),
     });
+
+    const response = await stream.finalMessage();
 
     const text = response.content
       .filter((block): block is Anthropic.TextBlock => block.type === "text")

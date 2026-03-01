@@ -8,6 +8,9 @@ const ConfigSchema = z.object({
   openaiApiKey: z.string().optional(),
   googleApiKey: z.string().optional(),
 
+  // Optional API key for LiteLLM proxy (used instead of provider keys when LLM_BASE_URL is set)
+  litellmApiKey: z.string().optional(),
+
   // Default model alias or raw model ID (e.g., "claude-sonnet-4", "gpt-4o", "gemini-2.5-pro")
   llmModel: z.string().default("gpt-5-mini"),
 
@@ -44,6 +47,7 @@ export function loadConfig(): Config {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
     openaiApiKey: process.env.OPENAI_API_KEY || undefined,
     googleApiKey: process.env.GOOGLE_API_KEY || undefined,
+    litellmApiKey: process.env.LITELLM_API_KEY || undefined,
 
     // Model — LLM_MODEL takes priority, falls back to legacy CLAUDE_MODEL
     llmModel: process.env.LLM_MODEL || process.env.CLAUDE_MODEL || undefined,

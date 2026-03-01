@@ -115,6 +115,7 @@ export interface MultiProviderKeys {
   anthropicApiKey?: string;
   openaiApiKey?: string;
   googleApiKey?: string;
+  litellmApiKey?: string;
 }
 
 /**
@@ -162,12 +163,27 @@ export function getApiKeyForProvider(provider: ProviderName, keys: MultiProvider
 
 /**
  * Given a resolved model and the set of API keys, create the appropriate provider.
+ *
+ * When a custom base URL is set (LiteLLM proxy), all requests are routed through
+ * the OpenAI-compatible provider since LiteLLM exposes an OpenAI-compatible API.
+ * The LiteLLM API key is used for authentication instead of the provider-specific key.
  */
 export async function createProviderForModel(
   resolved: ResolvedModel,
   keys: MultiProviderKeys,
   baseUrl?: string,
 ): Promise<LLMProvider> {
+  if (baseUrl) {
+    // LiteLLM proxy mode: route everything through OpenAI-compatible provider.
+    // The LiteLLM proxy exposes /v1/chat/completions regardless of backend provider.
+    const apiKey = keys.litellmApiKey
+      ? keys.litellmApiKey
+      : getApiKeyForProvider(resolved.provider, keys);
+
+    return createProvider("openai-compatible", { apiKey, baseUrl });
+  }
+
+  // Direct mode: use the native provider SDK.
   const apiKey = getApiKeyForProvider(resolved.provider, keys);
-  return createProvider(resolved.provider, { apiKey, baseUrl });
+  return createProvider(resolved.provider, { apiKey });
 }

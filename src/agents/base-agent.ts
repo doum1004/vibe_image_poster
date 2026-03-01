@@ -57,11 +57,15 @@ export abstract class BaseAgent<TOutput> {
     const modelAlias = getModelForAgent(this.name, pipelineModel);
     const resolved = resolveModel(modelAlias);
 
+    // When routing through a LiteLLM proxy, use the prefixed model ID
+    // (e.g., "anthropic/claude-opus-4-6") so the proxy can route correctly.
+    const effectiveModelId = config.llmBaseUrl ? resolved.litellmModelId : resolved.modelId;
+
     // Reuse cached provider if the model hasn't changed
-    if (this._provider && this._resolvedModelId === resolved.modelId) {
+    if (this._provider && this._resolvedModelId === effectiveModelId) {
       return {
         provider: this._provider,
-        modelId: resolved.modelId,
+        modelId: effectiveModelId,
         maxOutputTokens: resolved.maxOutputTokens,
       };
     }
@@ -72,16 +76,17 @@ export abstract class BaseAgent<TOutput> {
         anthropicApiKey: config.anthropicApiKey,
         openaiApiKey: config.openaiApiKey,
         googleApiKey: config.googleApiKey,
+        litellmApiKey: config.litellmApiKey,
       },
       config.llmBaseUrl,
     );
 
     this._provider = provider;
-    this._resolvedModelId = resolved.modelId;
+    this._resolvedModelId = effectiveModelId;
 
     return {
       provider,
-      modelId: resolved.modelId,
+      modelId: effectiveModelId,
       maxOutputTokens: resolved.maxOutputTokens,
     };
   }
@@ -142,9 +147,10 @@ export abstract class BaseAgent<TOutput> {
     // Strip leading/trailing whitespace
     let cleaned = text.trim();
 
-    // Remove outer code fence if present (greedy — handles nested backticks in HTML)
-    const fenceMatch = cleaned.match(/^```(?:json)?\s*\n([\s\S]*)\n```\s*$/);
-    if (fenceMatch) {
+    // Remove outer code fence if present (greedy — handles nested backticks in HTML).
+    // Also handles truncated responses where the closing fence is missing.
+    const fenceMatch = cleaned.match(/^```(?:json)?\s*\n([\s\S]*?)(?:\n```\s*$|$)/);
+    if (fenceMatch && fenceMatch[1]) {
       cleaned = fenceMatch[1].trim();
     }
 
@@ -182,6 +188,15 @@ export abstract class BaseAgent<TOutput> {
 
         if (ch === "\\") {
           if (inString) isEscaped = true;
+          continue;
+        }
+
+        // Literal newlines cannot appear inside JSON strings.
+        // If we see one while inString, the LLM produced invalid JSON
+        // with unescaped newlines — reset string state so the bracket
+        // matcher doesn't get confused by quotes in embedded HTML.
+        if (inString && (ch === "\n" || ch === "\r")) {
+          inString = false;
           continue;
         }
 

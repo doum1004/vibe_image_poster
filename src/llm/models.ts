@@ -21,6 +21,8 @@ export interface ModelEntry {
   maxOutputTokens: number;
   /** Human-readable description */
   description: string;
+  /** Optional LiteLLM proxy model ID override (e.g., a virtual alias on the proxy) */
+  litellmModelId?: string;
 }
 
 /**
@@ -36,8 +38,9 @@ const MODEL_REGISTRY: ReadonlyMap<string, ModelEntry> = new Map<string, ModelEnt
       provider: "anthropic",
       modelId: "claude-sonnet-4-5-20250929",
       contextWindow: 200_000,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: 16_384,
       description: "Claude Sonnet 4.5 — strong all-round, hybrid reasoning",
+      litellmModelId: "claude-sonnet-4-5-20250929",
     },
   ],
   [
@@ -47,7 +50,7 @@ const MODEL_REGISTRY: ReadonlyMap<string, ModelEntry> = new Map<string, ModelEnt
       provider: "anthropic",
       modelId: "claude-sonnet-4-20250514",
       contextWindow: 200_000,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: 16_384,
       description: "Claude Sonnet 4 — balanced speed and intelligence",
     },
   ],
@@ -60,6 +63,18 @@ const MODEL_REGISTRY: ReadonlyMap<string, ModelEntry> = new Map<string, ModelEnt
       contextWindow: 200_000,
       maxOutputTokens: 32_000,
       description: "Claude Opus 4 — strongest Anthropic model",
+    },
+  ],
+  [
+    "claude-opus-4.6",
+    {
+      alias: "claude-opus-4.6",
+      provider: "anthropic",
+      modelId: "claude-opus-4-6",
+      contextWindow: 200_000,
+      maxOutputTokens: 32_000,
+      description: "Claude Opus 4.6 — latest Anthropic flagship model",
+      litellmModelId: "claude-opus-4-6",
     },
   ],
   [
@@ -232,8 +247,10 @@ export interface ResolvedModel {
   alias: string;
   /** Provider to use */
   provider: ProviderName;
-  /** Actual model ID to send to the API */
+  /** Actual model ID to send to the API (provider-specific, prefix stripped) */
   modelId: string;
+  /** LiteLLM-style model ID with provider prefix (e.g., "anthropic/claude-opus-4-6") */
+  litellmModelId: string;
   /** Max output tokens (from registry or default) */
   maxOutputTokens: number;
   /** Whether this came from the registry */
@@ -252,14 +269,31 @@ export interface ResolvedModel {
  * @param aliasOrId - Model alias (e.g., "claude-4.5") or raw model ID
  * @param providerOverride - Force a specific provider (e.g., for LiteLLM proxy)
  */
+/**
+ * Build a LiteLLM-style model ID with provider prefix (e.g., "anthropic/claude-opus-4-6").
+ * For openai and openai-compatible providers, the model ID is returned as-is
+ * since LiteLLM uses "openai/" prefix only when needed.
+ */
+function buildLitellmModelId(provider: ProviderName, modelId: string): string {
+  const LITELLM_PREFIXES: Record<ProviderName, string> = {
+    anthropic: "anthropic/",
+    openai: "openai/",
+    google: "google/",
+    "openai-compatible": "",
+  };
+  return `${LITELLM_PREFIXES[provider]}${modelId}`;
+}
+
 export function resolveModel(aliasOrId: string, providerOverride?: ProviderName): ResolvedModel {
   // 1. Exact alias match
   const byAlias = MODEL_REGISTRY.get(aliasOrId);
   if (byAlias) {
+    const provider = providerOverride ?? byAlias.provider;
     return {
       alias: byAlias.alias,
-      provider: providerOverride ?? byAlias.provider,
+      provider,
       modelId: byAlias.modelId,
+      litellmModelId: byAlias.litellmModelId ?? buildLitellmModelId(provider, byAlias.modelId),
       maxOutputTokens: byAlias.maxOutputTokens,
       fromRegistry: true,
     };
@@ -268,10 +302,12 @@ export function resolveModel(aliasOrId: string, providerOverride?: ProviderName)
   // 2. Match by modelId
   for (const entry of MODEL_REGISTRY.values()) {
     if (entry.modelId === aliasOrId) {
+      const provider = providerOverride ?? entry.provider;
       return {
         alias: entry.alias,
-        provider: providerOverride ?? entry.provider,
+        provider,
         modelId: entry.modelId,
+        litellmModelId: entry.litellmModelId ?? buildLitellmModelId(provider, entry.modelId),
         maxOutputTokens: entry.maxOutputTokens,
         fromRegistry: true,
       };
@@ -293,10 +329,12 @@ export function resolveModel(aliasOrId: string, providerOverride?: ProviderName)
     }
   }
 
+  const provider = providerOverride ?? detectedProvider;
   return {
     alias: aliasOrId,
-    provider: providerOverride ?? detectedProvider,
+    provider,
     modelId,
+    litellmModelId: buildLitellmModelId(provider, modelId),
     maxOutputTokens: 8_192,
     fromRegistry: false,
   };
