@@ -8,6 +8,7 @@ import { getConfig } from "../config.js";
 // Renderer
 import { buildSlideHtml } from "../renderer/html-builder.js";
 import { closeBrowser, renderAllSlides } from "../renderer/png-exporter.js";
+import { buildPresentation } from "../renderer/presentation-builder.js";
 import {
   ensureDir,
   getOutputDir,
@@ -188,6 +189,17 @@ export async function runPipeline(options: PipelineOptions): Promise<void> {
     log.step("Rendering PNGs");
     const pngPaths = await renderAllSlides(ctx.htmlSlides, slidesDir);
     ctx.pngPaths = pngPaths;
+
+    // ─── Presentation ───────────────────────────────────────────
+    log.step("Generating presentation viewer");
+    try {
+      const presentationPath = await buildPresentation(slidesDir);
+      log.success(`Presentation: ${presentationPath}`);
+    } catch (err) {
+      log.warn(
+        `Presentation generation skipped: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
 
     // ─── Summary ─────────────────────────────────────────────────
     log.divider();
