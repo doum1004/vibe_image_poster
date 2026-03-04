@@ -3,8 +3,8 @@ import { dirname, join } from "node:path";
 import { CopyAgent } from "../agents/contents-marketer.js";
 import { ResearcherAgent } from "../agents/researcher.js";
 import { PipelineContext } from "../pipeline/context.js";
-import { CopyOutput, PlanOutput, type ResearchOutput } from "../pipeline/types.js";
 import { runPipeline } from "../pipeline/orchestrator.js";
+import { CopyOutput, PlanOutput, type ResearchOutput } from "../pipeline/types.js";
 import { renderAllSlides } from "../renderer/png-exporter.js";
 import { reRenderAllSlides } from "../renderer/template-renderer.js";
 import {

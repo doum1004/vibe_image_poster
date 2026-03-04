@@ -59,24 +59,25 @@ const BROWSER_PREVIEW_CSS = `
   }
 }`;
 
-const BROWSER_PREVIEW_JS = `
-<script>
-(function() {
-  var CARD_W = 1080, CARD_H = 1440;
-  function fit() {
-    if (window.innerWidth >= 1080 && window.innerHeight >= 1440) return;
-    var card = document.querySelector('.card');
-    if (!card) return;
-    var scaleX = window.innerWidth / CARD_W;
-    var scaleY = window.innerHeight / CARD_H;
-    var scale = Math.min(scaleX, scaleY);
-    card.style.transform = 'scale(' + scale + ')';
-  }
-  window.addEventListener('resize', fit);
-  window.addEventListener('DOMContentLoaded', fit);
-  fit();
-})();
-<\/script>`;
+const BROWSER_PREVIEW_JS = [
+  "<script>",
+  "(function() {",
+  "  var CARD_W = 1080, CARD_H = 1440;",
+  "  function fit() {",
+  "    if (window.innerWidth >= 1080 && window.innerHeight >= 1440) return;",
+  "    var card = document.querySelector('.card');",
+  "    if (!card) return;",
+  "    var scaleX = window.innerWidth / CARD_W;",
+  "    var scaleY = window.innerHeight / CARD_H;",
+  "    var scale = Math.min(scaleX, scaleY);",
+  "    card.style.transform = 'scale(' + scale + ')';",
+  "  }",
+  "  window.addEventListener('resize', fit);",
+  "  window.addEventListener('DOMContentLoaded', fit);",
+  "  fit();",
+  "})();",
+  "</script>",
+].join("\n");
 
 /**
  * Inject browser-preview CSS into a complete HTML document.
@@ -101,7 +102,7 @@ function injectPreviewCSS(html: string): string {
   // Inject scaling JS before </body>
   const bodyCloseIdx = html.lastIndexOf("</body>");
   if (bodyCloseIdx !== -1) {
-    html = html.slice(0, bodyCloseIdx) + BROWSER_PREVIEW_JS + "\n" + html.slice(bodyCloseIdx);
+    html = `${html.slice(0, bodyCloseIdx)}${BROWSER_PREVIEW_JS}\n${html.slice(bodyCloseIdx)}`;
   } else {
     html += BROWSER_PREVIEW_JS;
   }

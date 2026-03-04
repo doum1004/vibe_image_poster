@@ -87,7 +87,7 @@ export function savePreferences(prefs: UserPreferences): void {
     mkdirSync(dir, { recursive: true });
   }
 
-  writeFileSync(filePath, JSON.stringify(prefs, null, 2) + "\n", "utf-8");
+  writeFileSync(filePath, `${JSON.stringify(prefs, null, 2)}\n`, "utf-8");
 }
 
 // ─── Convenience Accessors ──────────────────────────────────────────────

@@ -150,7 +150,7 @@ export abstract class BaseAgent<TOutput> {
     // Remove outer code fence if present (greedy — handles nested backticks in HTML).
     // Also handles truncated responses where the closing fence is missing.
     const fenceMatch = cleaned.match(/^```(?:json)?\s*\n([\s\S]*?)(?:\n```\s*$|$)/);
-    if (fenceMatch && fenceMatch[1]) {
+    if (fenceMatch?.[1]) {
       cleaned = fenceMatch[1].trim();
     }
 
