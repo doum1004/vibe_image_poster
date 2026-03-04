@@ -1,12 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
-import {
-  ensureDir,
-  fileExists,
-  listDirs,
-  readTextFile,
-  writeOutputFile,
-} from "../utils/file.js";
+import { ensureDir, fileExists, listDirs, readTextFile, writeOutputFile } from "../utils/file.js";
 import { log } from "../utils/logger.js";
 
 const TEMPLATES_DIR = "./templates";
@@ -53,7 +47,9 @@ export async function addTemplate(sourceDir: string, name?: string): Promise<voi
 
   if (await fileExists(destDir)) {
     log.error(`Template "${templateName}" already exists.`);
-    log.info(`Remove it first or choose a different name with: vibe-poster template add <dir> <name>`);
+    log.info(
+      `Remove it first or choose a different name with: vibe-poster template add <dir> <name>`,
+    );
     process.exit(1);
   }
 

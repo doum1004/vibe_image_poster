@@ -34,7 +34,10 @@ program
     "LLM model alias or ID (e.g., claude-sonnet-4, gpt-4o, gemini-2.5-pro)",
   )
   .option("--template <dir>", "Source directory with slides/ templates to reuse")
-  .option("--rerender <file>", "Path to copy.json — skip AI, just apply copy to templates (requires --template)")
+  .option(
+    "--rerender <file>",
+    "Path to copy.json — skip AI, just apply copy to templates (requires --template)",
+  )
   .action(async (topic: string | undefined, opts) => {
     try {
       const config = loadConfig();

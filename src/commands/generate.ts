@@ -49,7 +49,9 @@ export async function generate(topic: string | undefined, opts: GenerateOptions)
     await templateRerender(opts.template, opts.rerender, opts);
   } else if (opts.template) {
     if (!topic && !opts.input) {
-      log.error("--template without --rerender requires a topic or --input for AI copy generation.");
+      log.error(
+        "--template without --rerender requires a topic or --input for AI copy generation.",
+      );
       process.exit(1);
     }
     await templateWithAI(opts.template, topic, opts);

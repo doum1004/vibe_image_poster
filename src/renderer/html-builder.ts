@@ -78,7 +78,6 @@ const BROWSER_PREVIEW_JS = `
 })();
 <\/script>`;
 
-
 /**
  * Inject browser-preview CSS into a complete HTML document.
  * Inserts before the closing </style> or </head> tag.

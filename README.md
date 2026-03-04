@@ -98,12 +98,85 @@ Each agent can use a different model for cost optimization:
 
 Unregistered model IDs are auto-detected by name prefix or fall back to OpenAI-compatible. LiteLLM-style prefixes (e.g. `anthropic/claude-sonnet-4`) are supported.
 
+## MCP Server (Agent-Driven Mode)
+
+vibe-poster can run as an **MCP server** where the connected LLM agent (Claude, GPT, etc.) **is the brain**. The agent does all creative work — research, planning, copywriting, design, HTML coding — and the server handles only non-AI operations: validation, file I/O, and PNG rendering.
+
+**No API keys needed.** The LLM agent calling the tools IS the LLM.
+
+### MCP Tools
+
+| Tool | Description |
+|---|---|
+| `save_pipeline_data` | Validate & save stage output (research, plan, copy, design JSON) |
+| `build_slides` | Validate HTML slides against design rules, wrap with tokens, save to disk |
+| `render_pngs` | Render HTML slides to 1080×1440px PNGs via headless Chrome (auto-generates presentation) |
+| `generate_presentation` | Generate a standalone presentation.html viewer from a slides directory |
+| `list_series` | List available series themes |
+| `get_pattern_catalog` | Get all 28 layout patterns with structure hints |
+
+### MCP Prompts
+
+| Prompt | Description |
+|---|---|
+| `pipeline_overview` | Full pipeline guide with JSON schemas for all 6 stages |
+| `html_developer_guide` | Detailed HTML/CSS rules for building slides |
+
+### MCP Resources
+
+| Resource | Description |
+|---|---|
+| `vibe-poster://patterns` | Layout pattern catalog (JSON) |
+| `vibe-poster://design-tokens` | CSS custom properties |
+| `vibe-poster://base-styles` | Base CSS reset and utilities |
+| `vibe-poster://pattern-list` | Compact pattern list for prompts |
+
+### Setup for Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "vibe-poster": {
+      "command": "bun",
+      "args": ["src/mcp-server.ts"],
+      "cwd": "/path/to/vibe_image_poster"
+    }
+  }
+}
+```
+
+### Setup for Cursor
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "vibe-poster": {
+      "command": "bun",
+      "args": ["src/mcp-server.ts"],
+      "cwd": "/path/to/vibe_image_poster"
+    }
+  }
+}
+```
+
+### Run standalone
+
+```bash
+bun run mcp
+```
+
+The server communicates over stdio. An MCP client must connect — running directly in a terminal will appear to hang (expected).
+
 ## Architecture
 
 ### Pipeline Flow
 
 ```
-Topic/File -> Research -> Plan -> Copy -> Design -> HTML Build -> Auto-Validate -> QA Review -> PNG Export
+Topic/File -> Research -> Plan -> Copy -> Design -> HTML Build -> Auto-Validate -> QA Review -> PNG Export -> Presentation
                                                                                       |
                                                                           (fix loop, up to N iterations)
 ```
@@ -139,6 +212,7 @@ output/
     copy.json           # Copy for each slide
     design-brief.json   # Color palette and layout patterns
     qa-report.json      # QA review results
+    presentation.html   # Interactive carousel viewer (HTML↔PNG toggle)
     slides/
       slide-01.html     # Standalone HTML (viewable in browser)
       slide-01.png      # Rendered 1080x1440 PNG
@@ -146,6 +220,18 @@ output/
       slide-02.png
       ...
 ```
+
+### Presentation Viewer
+
+`presentation.html` is a standalone, zero-dependency HTML file that lets you view all slides in a carousel:
+
+- **Arrow keys / Space** — navigate between slides
+- **T** — toggle between live HTML (iframe) and rendered PNG views
+- **F** — fullscreen
+- **Swipe** — touch navigation on mobile
+- Thumbnail strip at the bottom for quick jumping
+
+Generated automatically after PNG rendering (both CLI and MCP). Can also be triggered independently via the `generate_presentation` MCP tool.
 
 ## Development
 
@@ -165,6 +251,7 @@ bun run format:fix # Auto-fix formatting
 ```
 src/
   index.ts                    # CLI entry point (Commander)
+  mcp-server.ts               # MCP server entry point (for 3rd-party LLM agents)
   config.ts                   # Env-based config with Zod validation
   agents/
     base-agent.ts             # Abstract base (provider-agnostic execution)
@@ -190,6 +277,7 @@ src/
   renderer/
     html-builder.ts           # Wraps partial HTML into full documents
     png-exporter.ts           # Puppeteer-based HTML-to-PNG
+    presentation-builder.ts   # Generates interactive carousel viewer
     templates/                # Fallback templates (cover, body, cta)
   validation/
     rules.ts                  # Canonical rule definitions
@@ -198,7 +286,24 @@ src/
     file.ts                   # File I/O helpers, slugify
     paths.ts                  # Path resolution
     logger.ts                 # Colored terminal logger
-tests/                        # Bun test suite
+tests/                        # Bun test suite (115 tests)
+  renderer/
+    html-builder.test.ts      # quickValidateHtml, buildSlideHtml
+    presentation-builder.test.ts # Carousel generation, PNG toggle, navigation
+  pipeline/
+    types.test.ts             # Zod schema validation for all pipeline stages
+    context.test.ts           # Pipeline state management
+  validation/
+    slide-validator.test.ts   # HTML validation rules
+  design-system/
+    patterns.test.ts          # Pattern catalog integrity
+  utils/
+    file.test.ts              # slugify, getOutputDir
+  config/
+    config.test.ts            # Env-based config loading
+  llm/
+    models.test.ts            # Model registry and resolution
+    provider.test.ts          # Provider API key handling
 ```
 
 ### Adding a New Layout Pattern
