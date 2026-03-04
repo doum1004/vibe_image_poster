@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { buildSlideHtml } from "../../src/renderer/html-builder.js";
 import { buildPresentation } from "../../src/renderer/presentation-builder.js";
 
 const TMP = join(import.meta.dir, ".tmp-presentation-test");
@@ -138,9 +139,83 @@ body{margin:0;width:1080px;height:1440px;overflow:hidden}
 
     const srcdocMatch = content.match(/var htmlSrcdocs = (\[[\s\S]*?\]);/);
     expect(srcdocMatch).toBeTruthy();
-    const srcdocs: string[] = JSON.parse(srcdocMatch![1]);
+    const srcdocs: string[] = JSON.parse(srcdocMatch?.[1] ?? "[]");
     expect(srcdocs[0]).toContain("Slide 1");
     expect(srcdocs[1]).toContain("Slide 2");
     expect(srcdocs[2]).toContain("Slide 3");
+  });
+});
+
+describe("build_slides → buildPresentation integration", () => {
+  const INTEGRATION_DIR = join(TMP, "integration-output");
+  const INTEGRATION_SLIDES = join(INTEGRATION_DIR, "slides");
+
+  it("generates presentation.html after building slides via buildSlideHtml", async () => {
+    await mkdir(INTEGRATION_SLIDES, { recursive: true });
+
+    const fragments = [
+      '<div class="card"><div class="card-content"><h1 data-bind="heading">제목 1</h1></div><div class="bottom-bar">@test</div></div>',
+      '<div class="card"><div class="card-content"><p data-bind="body">본문 2</p></div><div class="bottom-bar">@test</div></div>',
+    ];
+
+    for (let i = 0; i < fragments.length; i++) {
+      const html = await buildSlideHtml(fragments[i], "default");
+      const padded = String(i + 1).padStart(2, "0");
+      await writeFile(join(INTEGRATION_SLIDES, `slide-${padded}.html`), html);
+    }
+
+    const presentationPath = await buildPresentation(INTEGRATION_SLIDES);
+    expect(presentationPath).toBe(join(INTEGRATION_DIR, "presentation.html"));
+
+    await access(presentationPath);
+    const content = await readFile(presentationPath, "utf-8");
+
+    expect(content).toContain("var TOTAL = 2;");
+    expect(content).toContain("제목 1");
+    expect(content).toContain("본문 2");
+    expect(content).toContain("nav-prev");
+  });
+
+  it("presentation embeds buildSlideHtml output including data-bind attributes", async () => {
+    const content = await readFile(join(INTEGRATION_DIR, "presentation.html"), "utf-8");
+
+    expect(content).toContain("data-bind");
+    expect(content).toContain("bottom-bar");
+  });
+
+  it("re-generates presentation when slides are rebuilt", async () => {
+    const fragment =
+      '<div class="card"><div class="card-content"><h1 data-bind="heading">새 슬라이드</h1></div><div class="bottom-bar">@test</div></div>';
+    const html = await buildSlideHtml(fragment, "default");
+    await writeFile(join(INTEGRATION_SLIDES, "slide-03.html"), html);
+
+    const presentationPath = await buildPresentation(INTEGRATION_SLIDES);
+    const content = await readFile(presentationPath, "utf-8");
+
+    expect(content).toContain("var TOTAL = 3;");
+    expect(content).toContain("새 슬라이드");
+  });
+});
+
+describe("buildPresentation error handling", () => {
+  it("rejects with descriptive error for non-existent directory", async () => {
+    const bogusDir = join(TMP, "does-not-exist", "slides");
+    await expect(buildPresentation(bogusDir)).rejects.toThrow();
+  });
+
+  it("error can be caught without crashing (simulates render_pngs silent catch)", async () => {
+    const bogusDir = join(TMP, "no-slides-here", "slides");
+    await mkdir(bogusDir, { recursive: true });
+
+    let presentationPath: string | null = null;
+    let presentationError: string | null = null;
+    try {
+      presentationPath = await buildPresentation(bogusDir);
+    } catch (e) {
+      presentationError = e instanceof Error ? e.message : String(e);
+    }
+
+    expect(presentationPath).toBeNull();
+    expect(presentationError).toContain("No slide HTML files found");
   });
 });

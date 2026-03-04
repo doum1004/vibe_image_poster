@@ -415,7 +415,8 @@ server.registerTool(
     title: "Build & Validate HTML Slides",
     description:
       "Accepts HTML for each slide, validates against design rules, wraps with design tokens/base styles, " +
-      "and saves to disk. Returns validation results. Call this after writing HTML.",
+      "and saves to disk. Returns validation results. Call this after writing HTML. " +
+      "Also auto-generates presentation.html viewer.",
     inputSchema: {
       slides: z
         .array(
@@ -454,6 +455,13 @@ server.registerTool(
 
       const validation = validateAllSlides(htmlMap);
 
+      let presentationPath: string | null = null;
+      try {
+        presentationPath = await buildPresentation(slidesDir);
+      } catch {
+        // non-fatal — presentation generation can fail without blocking the build
+      }
+
       return {
         content: [
           {
@@ -463,6 +471,7 @@ server.registerTool(
                 success: true,
                 slidesDir,
                 slidesBuilt: args.slides.length,
+                ...(presentationPath ? { presentationPath } : {}),
                 validation: {
                   allPassed: validation.allPassed,
                   highIssues: validation.highCount,
@@ -550,10 +559,11 @@ server.registerTool(
       }));
 
       let presentationPath: string | null = null;
+      let presentationError: string | null = null;
       try {
         presentationPath = await buildPresentation(dir);
-      } catch {
-        // non-fatal — presentation is a bonus
+      } catch (e) {
+        presentationError = e instanceof Error ? e.message : String(e);
       }
 
       return {
@@ -565,7 +575,10 @@ server.registerTool(
                 success: true,
                 rendered,
                 count: rendered.length,
-                ...(presentationPath ? { presentation: presentationPath } : {}),
+                ...(presentationPath ? { presentationPath } : {}),
+                ...(presentationError
+                  ? { presentationWarning: `Presentation generation failed: ${presentationError}` }
+                  : {}),
               },
               null,
               2,
