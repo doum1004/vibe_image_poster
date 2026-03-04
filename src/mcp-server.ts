@@ -17,7 +17,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { getPatternListForPrompt, PATTERN_CATALOG } from "./design-system/shared/patterns.js";
-import { CopyOutput, DesignBriefOutput, PlanOutput, ResearchOutput } from "./pipeline/types.js";
+import {
+  CopyOutput,
+  DesignBriefOutput,
+  PlanOutput,
+  QAReport,
+  ResearchOutput,
+} from "./pipeline/types.js";
 import { buildSlideHtml } from "./renderer/html-builder.js";
 import { closeBrowser, renderAllSlides } from "./renderer/png-exporter.js";
 import { buildPresentation } from "./renderer/presentation-builder.js";
@@ -40,7 +46,7 @@ server.registerPrompt(
     title: "Card News Pipeline Overview",
     description:
       "Complete guide to generating card news. Start here. " +
-      "Explains the 6-stage pipeline and JSON schemas for each stage.",
+      "Explains the 8-stage pipeline and JSON schemas for each stage.",
   },
   async () => ({
     messages: [
@@ -50,7 +56,7 @@ server.registerPrompt(
           type: "text",
           text: `# vibe-poster Card News Pipeline
 
-You are generating Instagram card news (1080×1440px slides). Follow these 6 stages in order.
+You are generating Instagram card news (1080×1440px slides). Follow these 8 stages in order.
 Each stage produces JSON that feeds into the next. Use the tools to save, validate, and render.
 
 ## Stage 1: Research
@@ -78,8 +84,19 @@ Write standalone HTML for each slide. Each file: 1080×1440px, all CSS inline, n
 Call build_slides tool with your HTML. It validates and saves.
 Rules: Korean font stack, word-break:keep-all, overflow:hidden, min font 28px, data-bind attributes on content elements, .bottom-bar at bottom.
 
-## Stage 6: Render PNGs
-Call render_pngs tool to convert HTML slides to PNG images.
+## Stage 6: Validate & QA Review
+Run validate_slides to get auto-check results. Then review slides yourself:
+- Cross-reference all facts/stats against Stage 1 research data.
+- Check layout rules, emphasis limits, design consistency.
+- Produce a QA report → call save_qa_report to save it.
+Schema: { passedAutoChecks, autoCheckResults: [{rule, passed, detail?}], issues: [{slideNumber, severity: "high"|"medium"|"low", category, description, suggestion?}], overallVerdict: "pass"|"needs_revision" }
+If verdict is "needs_revision": fix the HTML and call build_slides again, then re-validate.
+
+## Stage 7: Render PNGs
+Call render_pngs tool to convert HTML slides to PNG images. Also auto-generates presentation.html.
+
+## Stage 8: Presentation (automatic)
+render_pngs auto-generates presentation.html. Or call generate_presentation independently.
 
 ## Workflow
 1. Research the topic → call save_pipeline_data(stage="research", data=...)
@@ -87,7 +104,9 @@ Call render_pngs tool to convert HTML slides to PNG images.
 3. Write copy → call save_pipeline_data(stage="copy", data=...)
 4. Design → call save_pipeline_data(stage="design", data=...)
 5. Build HTML → call build_slides(slides=[...], series=...)
-6. Render → call render_pngs(slidesDir=...)
+6. Validate → call validate_slides(slidesDir=...) → review results → call save_qa_report(...)
+7. If QA fails: fix HTML → call build_slides again → re-validate
+8. Render → call render_pngs(slidesDir=...)
 `,
         },
       },
@@ -162,6 +181,74 @@ Example:
 </body>
 </html>
 \`\`\`
+`,
+        },
+      },
+    ],
+  }),
+);
+
+server.registerPrompt(
+  "qa_reviewer_guide",
+  {
+    title: "QA Reviewer Guide",
+    description:
+      "Rules and checklist for reviewing slides. Use after build_slides or validate_slides " +
+      "to perform a thorough QA review before rendering.",
+  },
+  async () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `# QA Reviewer Guide
+
+You are reviewing card news slides for quality. Check every slide against these rules.
+
+## What You Check
+
+### Factual Accuracy (HIGH severity)
+- Every statistic in slides MUST match the research data exactly.
+- Every fact MUST be traceable to the research. No invented data.
+- Numbers, percentages, and sources must be consistent.
+
+### Layout Rules (HIGH severity)
+- Canvas: 1080×1440px with overflow:hidden on html/body/.card.
+- word-break: keep-all present.
+- No font size below 28px.
+- No external URLs (http://, https://, CDN links).
+
+### Design Rules (MEDIUM severity)
+- Every slide has a .bottom-bar element.
+- Max 2 .accent elements per slide.
+- Max 1 <strong> per slide. No nested accent inside strong.
+- Colors use CSS variables (no hardcoded hex in HTML elements).
+- Same layout pattern NOT used on 2 consecutive slides.
+
+### Content Rules (LOW severity)
+- Same emotion temperature not 3 slides in a row.
+- Text not truncated or incomplete.
+- Korean typography: keep-all respected, no awkward line breaks.
+
+## Severity Levels
+- **high**: Must fix before rendering. Factual errors, layout overflow, missing critical elements.
+- **medium**: Should fix. Design rule violations, emphasis overuse.
+- **low**: Nice to fix. Minor style suggestions.
+
+## Verdict
+- "pass" ONLY if zero high and zero medium issues.
+- "needs_revision" if any high or medium issue exists.
+
+## QA Report Schema
+{ passedAutoChecks: boolean, autoCheckResults: [{rule, passed, detail?}], issues: [{slideNumber, severity, category, description, suggestion?}], overallVerdict: "pass"|"needs_revision" }
+
+## Workflow
+1. Call validate_slides to get auto-check results.
+2. Review the auto-check output + read the HTML yourself.
+3. Cross-reference facts against research data.
+4. Produce the QA report → call save_qa_report to save it.
+5. If verdict is "needs_revision", fix the slides and call build_slides again.
 `,
         },
       },
@@ -555,6 +642,168 @@ server.registerTool(
       },
     ],
   }),
+);
+
+// ─── Tool: validate_slides ──────────────────────────────────────────────────
+
+server.registerTool(
+  "validate_slides",
+  {
+    title: "Validate Slides",
+    description:
+      "Runs auto-validation rules on built HTML slides (canvas size, overflow, font size, " +
+      "external URLs, bottom-bar, accent/strong limits, etc.). Returns per-slide results. " +
+      "Call this before QA review or after fixing slides to re-check.",
+    inputSchema: {
+      slidesDir: z
+        .string()
+        .describe("Path to the slides/ directory containing slide-XX.html files."),
+    },
+    annotations: {
+      title: "Validate Slides",
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (args) => {
+    try {
+      const dir = resolve(args.slidesDir);
+      const files = await readdir(dir);
+      const htmlFiles = files.filter((f) => /^slide-\d+\.html$/.test(f)).sort();
+
+      if (htmlFiles.length === 0) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `No slide HTML files found in ${dir}` }],
+        };
+      }
+
+      const slideMap = new Map<number, string>();
+      for (const file of htmlFiles) {
+        const num = parseInt(file.match(/\d+/)?.[0] ?? "0", 10);
+        const html = await readTextFile(join(dir, file));
+        slideMap.set(num, html);
+      }
+
+      const validation = validateAllSlides(slideMap);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                slidesDir: dir,
+                slidesChecked: slideMap.size,
+                allPassed: validation.allPassed,
+                highIssues: validation.highCount,
+                mediumIssues: validation.mediumCount,
+                lowIssues: validation.lowCount,
+                details: validation.reports.flatMap((r) =>
+                  r.results
+                    .filter((v) => !v.passed)
+                    .map((v) => ({
+                      slide: r.slideNumber,
+                      rule: v.rule,
+                      severity: v.severity,
+                      detail: v.detail,
+                    })),
+                ),
+                passedRulesSummary: validation.reports.map((r) => ({
+                  slide: r.slideNumber,
+                  passed: r.results.filter((v) => v.passed).length,
+                  failed: r.results.filter((v) => !v.passed).length,
+                  total: r.results.length,
+                })),
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (err) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `Validation failed: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+      };
+    }
+  },
+);
+
+// ─── Tool: save_qa_report ───────────────────────────────────────────────────
+
+server.registerTool(
+  "save_qa_report",
+  {
+    title: "Save QA Report",
+    description:
+      "Validates and saves a QA review report. The agent produces this after reviewing " +
+      "auto-validation results and manually checking facts, layout, and design rules.",
+    inputSchema: {
+      data: z.string().describe("JSON string of the QA report."),
+      outputDir: z.string().default("./output").describe("Base output directory."),
+      topic: z.string().default("untitled").describe("Topic name for subfolder."),
+    },
+    annotations: {
+      title: "Save QA Report",
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+  },
+  async (args) => {
+    try {
+      const parsed = JSON.parse(args.data);
+      const validated = QAReport.parse(parsed);
+
+      const outDir = resolveOutputDir(args.outputDir, args.topic);
+      await ensureDir(outDir);
+
+      const filePath = join(outDir, "qa-report.json");
+      await writeJsonFile(filePath, validated);
+
+      const highIssues = validated.issues.filter((i) => i.severity === "high").length;
+      const mediumIssues = validated.issues.filter((i) => i.severity === "medium").length;
+      const lowIssues = validated.issues.filter((i) => i.severity === "low").length;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                success: true,
+                file: filePath,
+                verdict: validated.overallVerdict,
+                passedAutoChecks: validated.passedAutoChecks,
+                issues: { high: highIssues, medium: mediumIssues, low: lowIssues },
+                totalIssues: validated.issues.length,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (err) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: `QA report save failed: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+      };
+    }
+  },
 );
 
 // ─── Tool: generate_presentation ────────────────────────────────────────────
