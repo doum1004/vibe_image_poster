@@ -1,9 +1,8 @@
 {
   "mcpServers": {
-    "vibe-poster": {
+    "slideforge": {
       "command": "bun",
-      "args": ["src/mcp-server.ts"],
-      "cwd": "C:/Workspace/Personal/vibe_image_poster"
+      "args": ["run", "C:\\Workspace\\Personal\\vibe_image_poster\\src\\mcp-server.ts"]
     }
   }
 }

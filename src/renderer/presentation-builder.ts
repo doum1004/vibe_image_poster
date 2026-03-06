@@ -81,6 +81,10 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Pretendard','Noto 
 .slide-frame iframe{width:100%;height:100%;border:none;display:block}
 .slide-frame img{width:100%;height:100%;object-fit:contain;display:block}
 
+/* ─── Touch Layer (captures taps over iframe) ─── */
+.touch-layer{position:absolute;inset:0;z-index:4}
+.presenter.ui-visible .touch-layer{pointer-events:none}
+
 /* ─── Nav Arrows (overlaid, auto-hide) ─── */
 .nav-arrow{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:56px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3);border:none;color:rgba(255,255,255,.85);font-size:16px;cursor:pointer;border-radius:8px;transition:background .15s,opacity .4s;z-index:5;backdrop-filter:blur(4px);opacity:0}
 .nav-arrow:hover{background:rgba(0,0,0,.6)}
@@ -139,6 +143,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Pretendard','Noto 
     <button class="nav-arrow left" id="nav-prev" onclick="go(-1)">◀</button>
     <div class="slide-frame" id="slide-frame"></div>
     <button class="nav-arrow right" id="nav-next" onclick="go(1)">▶</button>
+    <div class="touch-layer" id="touch-layer"></div>
   </div>
   <div class="thumb-strip" id="thumbs"></div>
 </div>
@@ -266,16 +271,19 @@ window.addEventListener('resize', fitSlide);
 window.addEventListener('DOMContentLoaded', init);
 
 var hideTimer = null;
+var presenter = document.querySelector('.presenter');
 function showUI() {
-  document.querySelector('.presenter').classList.add('ui-visible');
+  presenter.classList.add('ui-visible');
   clearTimeout(hideTimer);
   hideTimer = setTimeout(hideUI, 2500);
 }
 function hideUI() {
-  document.querySelector('.presenter').classList.remove('ui-visible');
+  presenter.classList.remove('ui-visible');
 }
+document.getElementById('touch-layer').addEventListener('click', function() {
+  showUI();
+});
 document.addEventListener('mousemove', showUI);
-document.addEventListener('touchstart', showUI, { passive: true });
 document.addEventListener('keydown', showUI);
 showUI();
 </script>

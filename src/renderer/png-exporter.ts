@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { getConfig } from "../config.js";
 import { writeBinaryFile } from "../utils/file.js";
@@ -144,7 +145,7 @@ export async function renderAllSlides(
 
   for (const [num, html] of slides.entries()) {
     const padded = String(num).padStart(2, "0");
-    const pngPath = `${outputDir}/slide-${padded}.png`;
+    const pngPath = join(outputDir, `slide-${padded}.png`);
 
     log.info(`Rendering slide ${padded}...`);
     await renderHtmlToPng(html, pngPath);

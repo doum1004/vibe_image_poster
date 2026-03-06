@@ -1,11 +1,11 @@
 {
-  "name": "vibe-image-poster",
+  "name": "slideforge",
   "version": "0.1.0",
-  "description": "CLI tool to generate Instagram card news (1080x1440px) using AI-powered 5-agent pipeline",
+  "description": "MCP server + CLI for generating Instagram card news (1080x1440px) carousels",
   "type": "module",
   "bin": {
-    "vibe-poster": "./src/index.ts",
-    "vibe-poster-mcp": "./src/mcp-server.ts"
+    "slideforge": "./src/index.ts",
+    "slideforge-mcp": "./src/mcp-server.ts"
   },
   "scripts": {
     "start": "bun src/index.ts",
@@ -19,11 +19,8 @@
     "format:fix": "biome format --write ./src ./tests"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
-    "@google/generative-ai": "^0.24.1",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "1.15.0",
     "commander": "^13.1.0",
-    "openai": "^6.25.0",
     "picocolors": "^1.1.1",
     "puppeteer-core": "^24.4.0",
     "zod": "^3.24.2"
