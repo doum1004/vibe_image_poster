@@ -1,6 +1,6 @@
 # SlideAgile
 
-Generates Instagram card news carousels (1080×1440px PNGs) with a Korean-first design system.
+Generates short-form card news slides (default 1080×1920 PNGs) with a Korean-first design system.
 
 **MCP Server** — Connect any LLM agent (Cursor, Claude Desktop, etc.). The agent does all creative work (research, planning, copywriting, design, HTML coding); SlideAgile handles validation, rendering, and file I/O. **No API keys needed.**
 
@@ -161,7 +161,7 @@ bun run mcp --transport sse --port 8080
 | `build_slides` | Validate HTML slides against design rules, wrap with tokens, save to disk |
 | `validate_slides` | Run auto-validation rules on built slides (read-only check) |
 | `save_qa_report` | Validate and save a QA review report |
-| `render_pngs` | Render HTML slides to 1080×1440px PNGs via headless Chrome (auto-generates presentation) |
+| `render_pngs` | Render HTML slides to PNGs via headless Chrome (auto-generates presentation) |
 | `generate_presentation` | Generate a standalone presentation.html viewer from a slides directory |
 | `list_themes` | List available themes |
 | `get_pattern_catalog` | Get all 28 layout patterns with structure hints |
@@ -231,6 +231,7 @@ When `--tts` is enabled, SlideAgile generates per-slide narration segments and k
 | `--out <file>` | Optional output MP4 path. Default: `deck.mp4` in the output directory (or parent of `slides/` if `--input` points to `slides/`) |
 | `--seconds-per-slide <n>` | Time per slide in seconds (default: `4`) |
 | `--fps <n>` | Output FPS (default: `30`) |
+| `--format <name>` | Video format: `match-source` (default, follows slide size), `short-form` (1080x1920), or `widescreen` (1920x1080) |
 | `--ffmpeg <path>` | Optional path to `ffmpeg` executable |
 | `--tts` | Enable narration via configured TTS provider |
 | `--tts-provider <name>` | Override provider for this run (`gcp-hd` or `openai`) |
@@ -243,6 +244,9 @@ slideagile video build --input ./output/2026-03-07_20-00-41_디지털-디톡스
 
 # With local GCP HD narration
 slideagile video build --input ./output/2026-03-07_20-00-41_디지털-디톡스 --tts --tts-provider gcp-hd --tts-language ko-KR
+
+# Widescreen long-form export
+slideagile video build --input ./output/2026-03-07_20-00-41_디지털-디톡스 --format widescreen
 
 # With presenter script (recommended)
 slideagile video build --input ./output/2026-03-07_20-00-41_디지털-디톡스 --tts --tts-provider gcp-hd --tts-language ko-KR --script-file ./output/2026-03-07_20-00-41_디지털-디톡스/narration-script.json
@@ -281,7 +285,7 @@ Topic -> Research -> Plan -> Copy -> Design -> HTML Build -> Validate & QA -> PN
 | **Plan** | Plan slide structure with emotional curve (empathy -> transition -> evidence -> action) | Emotion temperature 1-5 per slide |
 | **Copy** | Write Korean copy per slide | Strict char limits: heading 15, body 80/para, CTA 30 |
 | **Design** | Select layout patterns, define color palette | Choose from 28 pattern catalog |
-| **HTML Build** | Produce standalone HTML/CSS per slide | 1080x1440px, all CSS inline, no external deps, min 28px font |
+| **HTML Build** | Produce standalone HTML/CSS per slide | default 1080x1920 (or 1920x1080 long-form), all CSS inline, no external deps, min 28px font |
 | **QA Review** | Read-only review for factual/layout/design issues | Returns pass or needs_revision verdict |
 
 ### Design Constraints
@@ -306,7 +310,7 @@ output/
     presentation.html   # Interactive carousel viewer (HTML↔PNG toggle)
     slides/
       slide-01.html     # Standalone HTML (viewable in browser)
-      slide-01.png      # Rendered 1080x1440 PNG
+      slide-01.png      # Rendered PNG (matches selected slide format)
       slide-02.html
       slide-02.png
       ...

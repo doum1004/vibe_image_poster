@@ -1,5 +1,6 @@
 import type { IssueSeverity } from "../pipeline/types.js";
 import { log } from "../utils/logger.js";
+import { getCanvasForFormat, LEGACY_CANVAS, type SlideFormat } from "../renderer/slide-format.js";
 
 export interface ValidationRule {
   id: string;
@@ -25,16 +26,19 @@ export interface SlideValidationReport {
 
 // ─── Rule Definitions ────────────────────────────────────────────────
 
-const RULES: ValidationRule[] = [
+function getRules(canvas: { width: number; height: number }): ValidationRule[] {
+  return [
   {
     id: "canvas-size",
-    description: "Canvas must be 1080x1440px",
+    description: `Canvas must be ${canvas.width}x${canvas.height}px`,
     severity: "high",
     check: (html) => {
-      const has1080 = html.includes("1080") && html.includes("1440");
+      const hasCanvas = html.includes(String(canvas.width)) && html.includes(String(canvas.height));
       return {
-        passed: has1080,
-        detail: has1080 ? undefined : "Missing 1080x1440 canvas dimensions",
+        passed: hasCanvas,
+        detail: hasCanvas
+          ? undefined
+          : `Missing ${canvas.width}x${canvas.height} canvas dimensions`,
       };
     },
   },
@@ -52,7 +56,7 @@ const RULES: ValidationRule[] = [
   },
   {
     id: "no-vertical-overflow",
-    description: "Content must fit within the 1080x1440 canvas (no overflow)",
+    description: `Content must fit within the ${canvas.width}x${canvas.height} canvas (no overflow)`,
     severity: "high",
     check: (html) => {
       // Heuristic: flag if content suggests scrollable body/card or explicit overflow-y
@@ -189,14 +193,21 @@ const RULES: ValidationRule[] = [
     },
   },
 ];
+}
 
 /**
  * Validate a single slide HTML against all rules.
  */
-export function validateSlide(html: string, slideNumber: number): SlideValidationReport {
+export function validateSlide(
+  html: string,
+  slideNumber: number,
+  format?: SlideFormat,
+): SlideValidationReport {
+  const canvas = format ? getCanvasForFormat(format) : LEGACY_CANVAS;
+  const rules = getRules(canvas);
   return {
     slideNumber,
-    results: RULES.map((rule) => {
+    results: rules.map((rule) => {
       const result = rule.check(html, slideNumber);
       return {
         rule: rule.id,
@@ -212,7 +223,10 @@ export function validateSlide(html: string, slideNumber: number): SlideValidatio
  * Validate all slides and return combined results.
  * Also checks cross-slide rules (consecutive patterns, temperatures).
  */
-export function validateAllSlides(slides: Map<number, string>): {
+export function validateAllSlides(
+  slides: Map<number, string>,
+  format?: SlideFormat,
+): {
   reports: SlideValidationReport[];
   allPassed: boolean;
   highCount: number;
@@ -229,7 +243,7 @@ export function validateAllSlides(slides: Map<number, string>): {
   for (const num of sortedKeys) {
     const html = slides.get(num);
     if (!html) continue;
-    const report = validateSlide(html, num);
+    const report = validateSlide(html, num, format);
     reports.push(report);
 
     for (const r of report.results) {

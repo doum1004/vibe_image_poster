@@ -69,7 +69,7 @@ export async function addTemplate(sourceDir: string, name?: string): Promise<voi
   }
 
   // Copy JSON artifacts (plan.json, design-brief.json)
-  const artifacts = ["plan.json", "design-brief.json"];
+  const artifacts = ["plan.json", "design-brief.json", "slide-format.json"];
   for (const artifact of artifacts) {
     const src = join(sourceDir, artifact);
     if (await fileExists(src)) {

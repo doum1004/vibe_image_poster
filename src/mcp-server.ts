@@ -31,6 +31,7 @@ import {
 import { buildSlideHtml } from "./renderer/html-builder.js";
 import { closeBrowser, renderAllSlides } from "./renderer/png-exporter.js";
 import { buildPresentation } from "./renderer/presentation-builder.js";
+import { getCanvasForFormat, LEGACY_CANVAS, SLIDE_FORMATS, type SlideFormat } from "./renderer/slide-format.js";
 import { reRenderAllSlides } from "./renderer/template-renderer.js";
 import {
   ensureDir,
@@ -76,7 +77,7 @@ server.registerPrompt(
           type: "text",
           text: `# SlideAgile Card News Pipeline
 
-You are generating Instagram card news (1080×1440px slides). Follow these 8 stages in order.
+You are generating short-form card news (default 1080×1920 vertical slides). Follow these 8 stages in order.
 Each stage produces JSON that feeds into the next. Use the tools to save, validate, and render.
 
 ## Stage 1: Research
@@ -100,7 +101,7 @@ Schema: { theme, colorPalette: {primary, secondary, accent, background, text}, s
 Rules: No same pattern on consecutive slides. Cover→intro-cover, CTA→intro-cta.
 
 ## Stage 5: Build HTML
-Write standalone HTML for each slide. Each file: 1080×1440px, all CSS inline, no external deps.
+Write standalone HTML for each slide. Default canvas: 1080×1920 (short-form). For long-form, use 1920×1080 if requested. All CSS inline, no external deps.
 Call build_slides tool with your HTML. It validates and saves.
 Rules: Korean font stack, word-break:keep-all, overflow:hidden, min font 28px, data-bind attributes on content elements, .bottom-bar with author "${resolveAuthor()}" at bottom.
 
@@ -149,7 +150,7 @@ server.registerPrompt(
           text: `# HTML Slide Development Guide
 
 ## Canvas
-- Exactly 1080px × 1440px. overflow:hidden on html, body, .card.
+- Default short-form: exactly 1080px × 1920px. For long-form mode: 1920px × 1080px. overflow:hidden on html, body, .card.
 - Safe area: ~32-40px breathing room from edges.
 
 ## Standalone
@@ -237,7 +238,7 @@ You are reviewing card news slides for quality. Check every slide against these 
 - Numbers, percentages, and sources must be consistent.
 
 ### Layout Rules (HIGH severity)
-- Canvas: 1080×1440px with overflow:hidden on html/body/.card.
+- Canvas: short-form 1080×1920px (default) or long-form 1920×1080px, with overflow:hidden on html/body/.card.
 - word-break: keep-all present.
 - No font size below 28px.
 - No external URLs (http://, https://, CDN links).
@@ -450,6 +451,10 @@ server.registerTool(
         )
         .describe("Array of slide objects with slideNumber and html."),
       theme: z.string().default("default").describe("Theme name."),
+      format: z
+        .enum(SLIDE_FORMATS)
+        .default("short-form")
+        .describe("Slide format: short-form (1080x1920) or widescreen (1920x1080)."),
       outputDir: z.string().default("./output").describe("Base output directory."),
       topic: z.string().default("untitled").describe("Topic name for subfolder."),
     },
@@ -465,23 +470,29 @@ server.registerTool(
       const outDir = resolveOutputDir(args.outputDir, args.topic);
       const slidesDir = join(outDir, "slides");
       await ensureDir(slidesDir);
+      const canvas = getCanvasForFormat(args.format as SlideFormat);
 
       const htmlMap = new Map<number, string>();
 
       for (const slide of args.slides) {
-        const html = await buildSlideHtml(slide.html, args.theme);
+        const html = await buildSlideHtml(slide.html, args.theme, canvas);
         htmlMap.set(slide.slideNumber, html);
 
         const padded = String(slide.slideNumber).padStart(2, "0");
         await writeOutputFile(join(slidesDir, `slide-${padded}.html`), html);
       }
 
-      const validation = validateAllSlides(htmlMap);
+      const validation = validateAllSlides(htmlMap, args.format as SlideFormat);
+      await writeJsonFile(join(outDir, "slide-format.json"), {
+        format: args.format,
+        width: canvas.width,
+        height: canvas.height,
+      });
 
       let presentationPath: string | null = null;
       let presentationWarning: string | null = null;
       try {
-        presentationPath = await buildPresentation(slidesDir);
+        presentationPath = await buildPresentation(slidesDir, canvas);
       } catch (e) {
         presentationWarning = e instanceof Error ? e.message : String(e);
       }
@@ -495,6 +506,8 @@ server.registerTool(
                 success: true,
                 slidesDir,
                 slidesBuilt: args.slides.length,
+                slideFormat: args.format,
+                canvas,
                 ...(presentationPath ? { presentationPath } : {}),
                 ...(presentationWarning ? { presentationWarning } : {}),
                 validation: {
@@ -541,12 +554,16 @@ server.registerTool(
   {
     title: "Render Slides to PNG",
     description:
-      "Renders HTML slide files to 1080×1440px PNG images using headless Chrome. " +
+      "Renders HTML slide files to PNG images using headless Chrome. " +
       "Reads slide-XX.html files from the slides directory.",
     inputSchema: {
       slidesDir: z
         .string()
         .describe("Path to the slides/ directory containing slide-XX.html files."),
+      format: z
+        .enum(SLIDE_FORMATS)
+        .optional()
+        .describe("Optional override: short-form (1080x1920) or widescreen (1920x1080)."),
     },
     annotations: {
       title: "Render PNGs",
@@ -558,6 +575,7 @@ server.registerTool(
   async (args) => {
     try {
       const dir = resolve(args.slidesDir);
+      const outDir = resolve(dir, "..");
       const files = await readdir(dir);
       const htmlFiles = files.filter((f) => /^slide-\d+\.html$/.test(f)).sort();
 
@@ -575,7 +593,16 @@ server.registerTool(
         slideMap.set(num, html);
       }
 
-      const pngPaths = await renderAllSlides(slideMap, dir);
+      const metaPath = join(outDir, "slide-format.json");
+      const meta = (await fileExists(metaPath)) ? await readJsonFile<{ width?: number; height?: number }>(metaPath) : null;
+      const overrideFormat = args.format as SlideFormat | undefined;
+      const canvas = overrideFormat
+        ? getCanvasForFormat(overrideFormat)
+        : meta?.width && meta?.height
+          ? { width: meta.width, height: meta.height }
+          : LEGACY_CANVAS;
+
+      const pngPaths = await renderAllSlides(slideMap, dir, canvas);
 
       const rendered = [...pngPaths.entries()].map(([num, path]) => ({
         slide: num,
@@ -585,7 +612,7 @@ server.registerTool(
       let presentationPath: string | null = null;
       let presentationError: string | null = null;
       try {
-        presentationPath = await buildPresentation(dir);
+        presentationPath = await buildPresentation(dir, canvas);
       } catch (e) {
         presentationError = e instanceof Error ? e.message : String(e);
       }
@@ -599,6 +626,7 @@ server.registerTool(
                 success: true,
                 rendered,
                 count: rendered.length,
+                canvas,
                 ...(presentationPath ? { presentationPath } : {}),
                 ...(presentationError
                   ? { presentationWarning: `Presentation generation failed: ${presentationError}` }
@@ -1040,7 +1068,7 @@ server.registerTool(
       }
 
       // Copy source artifacts
-      for (const artifact of ["plan.json", "design-brief.json"]) {
+      for (const artifact of ["plan.json", "design-brief.json", "slide-format.json"]) {
         const src = join(sourceDir, artifact);
         if (await fileExists(src)) {
           const content = await readTextFile(src);
@@ -1063,11 +1091,20 @@ server.registerTool(
       // Optionally render PNGs
       if (args.renderPngs) {
         try {
-          const pngPaths = await renderAllSlides(updatedSlides, newSlidesDir);
+          const metaPath = join(newOutDir, "slide-format.json");
+          const meta = (await fileExists(metaPath))
+            ? await readJsonFile<{ width?: number; height?: number }>(metaPath)
+            : null;
+          const canvas =
+            meta?.width && meta?.height
+              ? { width: meta.width, height: meta.height }
+              : LEGACY_CANVAS;
+
+          const pngPaths = await renderAllSlides(updatedSlides, newSlidesDir, canvas);
           result.pngsRendered = pngPaths.size;
 
           try {
-            result.presentationPath = await buildPresentation(newSlidesDir);
+            result.presentationPath = await buildPresentation(newSlidesDir, canvas);
           } catch (e) {
             result.presentationWarning = e instanceof Error ? e.message : String(e);
           }

@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { generate } from "./commands/generate.js";
 import { createTheme, listThemes } from "./commands/theme.js";
 import { addTemplate, listTemplates } from "./commands/template.js";
-import { buildVideo } from "./commands/video.js";
+import { buildVideo, VIDEO_FORMATS } from "./commands/video.js";
 import { loadConfig } from "./config.js";
 import { log } from "./utils/logger.js";
 import {
@@ -21,7 +21,7 @@ const program = new Command();
 program
   .name("slideagile")
   .description(
-    "Generate Instagram card news (1080x1440px). " +
+    "Generate short-form card news (default 1080x1920). " +
       "Use as an MCP server (recommended) or CLI for template re-rendering.",
   )
   .version("0.1.0");
@@ -98,6 +98,10 @@ program
       .option("--out <file>", "Output video path (default: <input>/deck.mp4)")
       .option("--seconds-per-slide <n>", "Seconds each slide stays on screen", parseFloat, 4)
       .option("--fps <n>", "Output frame rate", (value) => parseInt(value, 10), 30)
+      .option(
+        "--format <name>",
+        `Video format (${VIDEO_FORMATS.join(", ")}, default: match-source)`,
+      )
       .option("--ffmpeg <path>", "Path to ffmpeg executable")
       .option("--tts", "Enable narration from copy.json")
       .option(
@@ -116,12 +120,20 @@ program
             log.error(`ttsProvider must be one of: ${TTS_PROVIDERS.join(", ")}`);
             process.exit(1);
           }
+          if (
+            opts.format &&
+            !VIDEO_FORMATS.includes(opts.format as (typeof VIDEO_FORMATS)[number])
+          ) {
+            log.error(`format must be one of: ${VIDEO_FORMATS.join(", ")}`);
+            process.exit(1);
+          }
 
           await buildVideo({
             input: opts.input,
             out: opts.out,
             secondsPerSlide: opts.secondsPerSlide,
             fps: opts.fps,
+            format: opts.format,
             ffmpegPath: opts.ffmpeg,
             tts: opts.tts,
             ttsProvider: opts.ttsProvider,

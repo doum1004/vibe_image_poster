@@ -21,7 +21,11 @@ export interface VideoBuildOptions {
   ttsVoice?: string;
   ttsLanguage?: string;
   scriptFile?: string;
+  format?: VideoFormat;
 }
+
+export const VIDEO_FORMATS = ["match-source", "short-form", "widescreen"] as const;
+export type VideoFormat = (typeof VIDEO_FORMATS)[number];
 
 const NarrationScript = z.object({
   slides: z.array(
@@ -47,6 +51,8 @@ export async function buildVideo(opts: VideoBuildOptions): Promise<void> {
   const slideAssets = await listSlidePngs(slidesDir);
 
   const ffmpeg = resolveFfmpegPath(opts.ffmpegPath);
+  const format = opts.format ?? "match-source";
+  const frameProfile = resolveFrameProfile(format);
 
   const ttsEnabled = opts.tts ?? false;
   const ttsSettings = resolveTtsSettings(opts);
@@ -55,13 +61,14 @@ export async function buildVideo(opts: VideoBuildOptions): Promise<void> {
   log.info(`Slides: ${slidesDir}`);
   log.info(`Output: ${outputPath}`);
   log.info(`Timing: ${secondsPerSlide}s per slide @ ${fps} fps`);
+  log.info(`Format: ${frameProfile.label}`);
   log.info(`FFmpeg: ${ffmpeg}`);
 
   if (!ttsEnabled) {
     const inputPattern = join(slidesDir, "slide-%02d.png");
     const inputFps = 1 / secondsPerSlide;
     log.step("Running ffmpeg");
-    await runFfmpeg(ffmpeg, [
+    const args = [
       "-y",
       "-framerate",
       inputFps.toString(),
@@ -74,7 +81,11 @@ export async function buildVideo(opts: VideoBuildOptions): Promise<void> {
       "-pix_fmt",
       "yuv420p",
       outputPath,
-    ]);
+    ];
+    if (frameProfile.videoFilter) {
+      args.splice(6, 0, "-vf", frameProfile.videoFilter);
+    }
+    await runFfmpeg(ffmpeg, args);
     log.divider();
     log.success(`Video created: ${outputPath}`);
     return;
@@ -123,7 +134,7 @@ export async function buildVideo(opts: VideoBuildOptions): Promise<void> {
         ]);
       }
 
-      await runFfmpeg(ffmpeg, [
+      const segmentArgs = [
         "-y",
         "-loop",
         "1",
@@ -141,7 +152,11 @@ export async function buildVideo(opts: VideoBuildOptions): Promise<void> {
         "aac",
         "-shortest",
         segmentPath,
-      ]);
+      ];
+      if (frameProfile.videoFilter) {
+        segmentArgs.splice(7, 0, "-vf", frameProfile.videoFilter);
+      }
+      await runFfmpeg(ffmpeg, segmentArgs);
     }
 
     const concatPath = `${tmpBase}-segments.txt`;
@@ -271,6 +286,27 @@ function resolveTtsSettings(
     "ko-KR";
 
   return { provider, voice, language };
+}
+
+function resolveFrameProfile(format: VideoFormat): { label: string; videoFilter?: string } {
+  if (format === "match-source") {
+    return {
+      label: "Match source slide resolution",
+    };
+  }
+  if (format === "widescreen") {
+    return {
+      label: "Widescreen long-form (1920x1080)",
+      videoFilter:
+        "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
+    };
+  }
+
+  return {
+    label: "Short-form mobile (1080x1920)",
+    videoFilter:
+      "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
+  };
 }
 
 async function loadCopyBySlide(

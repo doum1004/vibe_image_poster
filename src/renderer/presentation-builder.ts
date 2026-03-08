@@ -13,6 +13,7 @@
 import { readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { readTextFile, writeOutputFile } from "../utils/file.js";
+import { LEGACY_CANVAS, type SlideCanvas } from "./slide-format.js";
 
 /**
  * Build a presentation HTML file from a slides directory.
@@ -20,7 +21,10 @@ import { readTextFile, writeOutputFile } from "../utils/file.js";
  *
  * @returns Path to the generated presentation.html
  */
-export async function buildPresentation(slidesDir: string): Promise<string> {
+export async function buildPresentation(
+  slidesDir: string,
+  canvas: SlideCanvas = LEGACY_CANVAS,
+): Promise<string> {
   const outputDir = join(slidesDir, "..");
   const files = await readdir(slidesDir);
 
@@ -77,7 +81,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Pretendard','Noto 
 
 /* ─── Stage ─── */
 .stage{flex:1;position:relative;overflow:hidden;background:#111}
-.slide-frame{width:1080px;height:1440px;transform-origin:top left;position:absolute;top:0;left:0;overflow:hidden}
+.slide-frame{width:${canvas.width}px;height:${canvas.height}px;transform-origin:top left;position:absolute;top:0;left:0;overflow:hidden}
 .slide-frame iframe{width:100%;height:100%;border:none;display:block}
 .slide-frame img{width:100%;height:100%;object-fit:contain;display:block}
 
@@ -239,11 +243,11 @@ function fitSlide() {
   var frame = document.getElementById('slide-frame');
   var sw = stage.clientWidth;
   var sh = stage.clientHeight;
-  var scaleX = sw / 1080;
-  var scaleY = sh / 1440;
+  var scaleX = sw / ${canvas.width};
+  var scaleY = sh / ${canvas.height};
   var scale = Math.min(scaleX, scaleY, 1);
-  var renderW = 1080 * scale;
-  var renderH = 1440 * scale;
+  var renderW = ${canvas.width} * scale;
+  var renderH = ${canvas.height} * scale;
   frame.style.transform = 'scale(' + scale + ')';
   frame.style.left = ((sw - renderW) / 2) + 'px';
   frame.style.top = ((sh - renderH) / 2) + 'px';

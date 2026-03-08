@@ -1,5 +1,6 @@
 import { readTextFile } from "../utils/file.js";
 import { resolveFromSrc } from "../utils/paths.js";
+import { LEGACY_CANVAS, type SlideCanvas } from "./slide-format.js";
 
 /**
  * Reads the shared design tokens CSS file.
@@ -35,9 +36,10 @@ export async function getThemeCSS(theme: string): Promise<string> {
  * Puppeteer renders at exactly 1080x1440, so this does NOT activate
  * during PNG export.
  */
-const BROWSER_PREVIEW_CSS = `
+function getBrowserPreviewCss(canvas: SlideCanvas): string {
+  return `
 /* Browser preview: scale card to fit viewport height */
-@media (max-width: 1079px), (max-height: 1439px) {
+@media (max-width: ${canvas.width - 1}px), (max-height: ${canvas.height - 1}px) {
   html {
     width: 100% !important;
     height: 100vh !important;
@@ -58,43 +60,48 @@ const BROWSER_PREVIEW_CSS = `
     flex-shrink: 0;
   }
 }`;
+}
 
-const BROWSER_PREVIEW_JS = [
-  "<script>",
-  "(function() {",
-  "  var CARD_W = 1080, CARD_H = 1440;",
-  "  function fit() {",
-  "    if (window.innerWidth >= 1080 && window.innerHeight >= 1440) return;",
-  "    var card = document.querySelector('.card');",
-  "    if (!card) return;",
-  "    var scaleX = window.innerWidth / CARD_W;",
-  "    var scaleY = window.innerHeight / CARD_H;",
-  "    var scale = Math.min(scaleX, scaleY);",
-  "    card.style.transform = 'scale(' + scale + ')';",
-  "  }",
-  "  window.addEventListener('resize', fit);",
-  "  window.addEventListener('DOMContentLoaded', fit);",
-  "  fit();",
-  "})();",
-  "</script>",
-].join("\n");
+function getBrowserPreviewJs(canvas: SlideCanvas): string {
+  return [
+    "<script>",
+    "(function() {",
+    `  var CARD_W = ${canvas.width}, CARD_H = ${canvas.height};`,
+    "  function fit() {",
+    `    if (window.innerWidth >= ${canvas.width} && window.innerHeight >= ${canvas.height}) return;`,
+    "    var card = document.querySelector('.card');",
+    "    if (!card) return;",
+    "    var scaleX = window.innerWidth / CARD_W;",
+    "    var scaleY = window.innerHeight / CARD_H;",
+    "    var scale = Math.min(scaleX, scaleY);",
+    "    card.style.transform = 'scale(' + scale + ')';",
+    "  }",
+    "  window.addEventListener('resize', fit);",
+    "  window.addEventListener('DOMContentLoaded', fit);",
+    "  fit();",
+    "})();",
+    "</script>",
+  ].join("\n");
+}
 
 /**
  * Inject browser-preview CSS into a complete HTML document.
  * Inserts before the closing </style> or </head> tag.
  */
-function injectPreviewCSS(html: string): string {
+function injectPreviewCSS(html: string, canvas: SlideCanvas): string {
+  const previewCss = getBrowserPreviewCss(canvas);
+  const previewJs = getBrowserPreviewJs(canvas);
   // Inject CSS before the last </style> tag
   const styleCloseIdx = html.lastIndexOf("</style>");
   if (styleCloseIdx !== -1) {
-    html = `${html.slice(0, styleCloseIdx)}${BROWSER_PREVIEW_CSS}\n${html.slice(styleCloseIdx)}`;
+    html = `${html.slice(0, styleCloseIdx)}${previewCss}\n${html.slice(styleCloseIdx)}`;
   } else {
     // Fallback: insert before </head>
     const headCloseIdx = html.indexOf("</head>");
     if (headCloseIdx !== -1) {
       html =
         html.slice(0, headCloseIdx) +
-        `<style>${BROWSER_PREVIEW_CSS}\n</style>\n` +
+        `<style>${previewCss}\n</style>\n` +
         html.slice(headCloseIdx);
     }
   }
@@ -102,9 +109,9 @@ function injectPreviewCSS(html: string): string {
   // Inject scaling JS before </body>
   const bodyCloseIdx = html.lastIndexOf("</body>");
   if (bodyCloseIdx !== -1) {
-    html = `${html.slice(0, bodyCloseIdx)}${BROWSER_PREVIEW_JS}\n${html.slice(bodyCloseIdx)}`;
+    html = `${html.slice(0, bodyCloseIdx)}${previewJs}\n${html.slice(bodyCloseIdx)}`;
   } else {
-    html += BROWSER_PREVIEW_JS;
+    html += previewJs;
   }
 
   return html;
@@ -114,10 +121,14 @@ function injectPreviewCSS(html: string): string {
  * Assembles a complete standalone HTML document for a slide.
  * Merges design tokens + base styles + theme + slide-specific CSS + content.
  */
-export async function buildSlideHtml(slideHtml: string, theme: string): Promise<string> {
+export async function buildSlideHtml(
+  slideHtml: string,
+  theme: string,
+  canvas: SlideCanvas = LEGACY_CANVAS,
+): Promise<string> {
   // If the HTML already has <!DOCTYPE, assume it's already complete
   if (slideHtml.trim().startsWith("<!DOCTYPE") || slideHtml.trim().startsWith("<html")) {
-    return injectPreviewCSS(slideHtml);
+    return injectPreviewCSS(slideHtml, canvas);
   }
 
   // Otherwise, wrap the content in a complete HTML document

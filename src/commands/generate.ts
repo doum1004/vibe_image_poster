@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { CopyOutput } from "../pipeline/types.js";
 import { closeBrowser, renderAllSlides } from "../renderer/png-exporter.js";
+import { LEGACY_CANVAS } from "../renderer/slide-format.js";
 import { reRenderAllSlides } from "../renderer/template-renderer.js";
 import {
   ensureDir,
@@ -87,7 +88,16 @@ async function templateRerender(
   log.step("Rendering PNGs");
   let pngCount = 0;
   try {
-    const pngPaths = await renderAllSlides(updatedSlides, newSlidesDir);
+    const formatMetaPath = join(newOutputDir, "slide-format.json");
+    const formatMeta =
+      (await fileExists(formatMetaPath))
+        ? await readJsonFile<{ width?: number; height?: number }>(formatMetaPath)
+        : null;
+    const canvas =
+      formatMeta?.width && formatMeta?.height
+        ? { width: formatMeta.width, height: formatMeta.height }
+        : LEGACY_CANVAS;
+    const pngPaths = await renderAllSlides(updatedSlides, newSlidesDir, canvas);
     pngCount = pngPaths.size;
   } finally {
     await closeBrowser();
@@ -127,7 +137,7 @@ async function copyTemplates(sourceSlidesDir: string, destSlidesDir: string): Pr
  * so the new folder is self-contained.
  */
 async function copySourceArtifacts(sourceDir: string, newOutputDir: string): Promise<void> {
-  const artifacts = ["plan.json", "design-brief.json"];
+  const artifacts = ["plan.json", "design-brief.json", "slide-format.json"];
   for (const name of artifacts) {
     const src = join(sourceDir, name);
     if (await fileExists(src)) {

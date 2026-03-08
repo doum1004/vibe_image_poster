@@ -3,9 +3,7 @@ import puppeteer, { type Browser } from "puppeteer-core";
 import { getConfig } from "../config.js";
 import { writeBinaryFile } from "../utils/file.js";
 import { log } from "../utils/logger.js";
-
-const CANVAS_WIDTH = 1080;
-const CANVAS_HEIGHT = 1440;
+import { LEGACY_CANVAS, type SlideCanvas } from "./slide-format.js";
 
 let browserInstance: Browser | null = null;
 
@@ -100,14 +98,18 @@ export async function closeBrowser(): Promise<void> {
  * Render a standalone HTML string to a PNG file.
  * Uses page.setContent() to avoid file:// protocol issues.
  */
-export async function renderHtmlToPng(htmlContent: string, outputPath: string): Promise<void> {
+export async function renderHtmlToPng(
+  htmlContent: string,
+  outputPath: string,
+  canvas: SlideCanvas = LEGACY_CANVAS,
+): Promise<void> {
   const browser = await getBrowser();
   const page = await browser.newPage();
 
   try {
     await page.setViewport({
-      width: CANVAS_WIDTH,
-      height: CANVAS_HEIGHT,
+      width: canvas.width,
+      height: canvas.height,
       deviceScaleFactor: 1,
     });
 
@@ -121,7 +123,7 @@ export async function renderHtmlToPng(htmlContent: string, outputPath: string): 
 
     const screenshot = await page.screenshot({
       type: "png",
-      fullPage: false, // Clip to viewport only (1080x1440)
+      fullPage: false, // Clip to viewport only
       omitBackground: false,
     });
 
@@ -138,6 +140,7 @@ export async function renderHtmlToPng(htmlContent: string, outputPath: string): 
 export async function renderAllSlides(
   slides: Map<number, string>,
   outputDir: string,
+  canvas: SlideCanvas = LEGACY_CANVAS,
 ): Promise<Map<number, string>> {
   const pngPaths = new Map<number, string>();
 
@@ -148,7 +151,7 @@ export async function renderAllSlides(
     const pngPath = join(outputDir, `slide-${padded}.png`);
 
     log.info(`Rendering slide ${padded}...`);
-    await renderHtmlToPng(html, pngPath);
+    await renderHtmlToPng(html, pngPath, canvas);
     pngPaths.set(num, pngPath);
     log.success(`slide-${padded}.png`);
   }
