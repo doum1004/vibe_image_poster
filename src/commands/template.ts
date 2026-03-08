@@ -14,7 +14,7 @@ export async function listTemplates(): Promise<void> {
 
   if (dirs.length === 0) {
     log.info("No saved templates.");
-    log.info(`Add one with: slideforge template add <output-folder>`);
+    log.info(`Add one with: slideagile template add <output-folder>`);
     return;
   }
 
@@ -47,9 +47,7 @@ export async function addTemplate(sourceDir: string, name?: string): Promise<voi
 
   if (await fileExists(destDir)) {
     log.error(`Template "${templateName}" already exists.`);
-    log.info(
-      `Remove it first or choose a different name with: slideforge template add <dir> <name>`,
-    );
+    log.info(`Remove it first or choose a different name with: slideagile template add <dir> <name>`);
     process.exit(1);
   }
 
@@ -82,7 +80,7 @@ export async function addTemplate(sourceDir: string, name?: string): Promise<voi
 
   log.success(`Template "${templateName}" saved (${htmlFiles.length} slides)`);
   log.info(`Location: ${destDir}`);
-  log.info(`Use with: slideforge generate --template ${destDir} --rerender copy.json`);
+  log.info(`Use with: slideagile generate --template ${destDir} --rerender copy.json`);
 }
 
 async function countSlides(slidesDir: string): Promise<number> {

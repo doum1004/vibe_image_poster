@@ -1,9 +1,11 @@
 {
-  "name": "slideforge",
+  "name": "slideagile",
   "version": "0.1.0",
   "description": "MCP server + CLI for generating Instagram card news (1080x1440px) carousels",
   "type": "module",
   "bin": {
+    "slideagile": "./src/index.ts",
+    "slideagile-mcp": "./src/mcp-server.ts",
     "slideforge": "./src/index.ts",
     "slideforge-mcp": "./src/mcp-server.ts"
   },
@@ -19,8 +21,10 @@
     "format:fix": "biome format --write ./src ./tests"
   },
   "dependencies": {
+    "@google-cloud/text-to-speech": "^6.4.0",
     "@modelcontextprotocol/sdk": "1.15.0",
     "commander": "^13.1.0",
+    "ffmpeg-static": "^5.3.0",
     "picocolors": "^1.1.1",
     "puppeteer-core": "^24.4.0",
     "zod": "^3.24.2"

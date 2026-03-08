@@ -1,8 +1,8 @@
-# SlideForge
+# SlideAgile
 
 Generates Instagram card news carousels (1080×1440px PNGs) with a Korean-first design system.
 
-**MCP Server** — Connect any LLM agent (Cursor, Claude Desktop, etc.). The agent does all creative work (research, planning, copywriting, design, HTML coding); SlideForge handles validation, rendering, and file I/O. **No API keys needed.**
+**MCP Server** — Connect any LLM agent (Cursor, Claude Desktop, etc.). The agent does all creative work (research, planning, copywriting, design, HTML coding); SlideAgile handles validation, rendering, and file I/O. **No API keys needed.**
 
 The CLI is available for template re-rendering (applying new copy.json to existing slide templates).
 
@@ -22,25 +22,33 @@ bun run mcp   # Starts stdio server — connect from Cursor or Claude Desktop
 Set defaults once — they're saved to disk and used automatically on every run.
 
 ```bash
-slideforge config set author @MyBrand      # bottom-bar branding on every slide
-slideforge config set theme MyTheme        # design theme name
-slideforge config set output ./my-output   # default output directory
-slideforge config list                     # show all preferences
-slideforge config unset author             # remove a preference
+slideagile config set author @MyBrand      # bottom-bar branding on every slide
+slideagile config set theme MyTheme        # design theme name
+slideagile config set output ./my-output   # default output directory
+slideagile config set ttsProvider gcp-hd   # default narration TTS provider
+slideagile config set ttsVoice en-US-Chirp3-HD-Achernar
+slideagile config list                     # show all preferences
+slideagile config unset author             # remove a preference
 ```
 
 Preferences are stored at:
-- **Windows**: `%APPDATA%/slideforge/preferences.json`
-- **macOS**: `~/Library/Application Support/slideforge/preferences.json`
-- **Linux**: `~/.config/slideforge/preferences.json`
+- **Windows**: `%APPDATA%/slideagile/preferences.json`
+- **macOS**: `~/Library/Application Support/slideagile/preferences.json`
+- **Linux**: `~/.config/slideagile/preferences.json`
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `CHROME_PATH` | auto-detected | Chrome/Chromium executable path |
+| `FFMPEG_PATH` | bundled (`ffmpeg-static`) | FFmpeg executable path override for `video build` |
 | `DEFAULT_THEME` | `default` | Default theme name |
 | `DEFAULT_AUTHOR` | `@SlideForge` | Author / brand shown in the bottom bar of every slide |
+| `DEFAULT_TTS_PROVIDER` | `gcp-hd` | Default TTS provider for video narration (`gcp-hd` or `openai`) |
+| `DEFAULT_TTS_VOICE` | unset | Default TTS voice ID (provider-specific) |
+| `DEFAULT_TTS_LANGUAGE` | `ko-KR` | Default TTS language code for narration |
+| `GOOGLE_APPLICATION_CREDENTIALS` | unset | Path to GCP service-account JSON (required for local GCP TTS) |
+| `GOOGLE_CLOUD_PROJECT` | unset | GCP project ID (recommended for local GCP TTS) |
 
 MCP transport variables (`MCP_TRANSPORT`, `MCP_HOST`, `MCP_PORT`, etc.) are documented in the [Transport Modes](#transport-modes) section.
 
@@ -48,9 +56,15 @@ MCP transport variables (`MCP_TRANSPORT`, `MCP_HOST`, `MCP_PORT`, etc.) are docu
 
 **Resolution order** (for author): `DEFAULT_AUTHOR` env var > `author` user preference > `"@SlideForge"`
 
+**Resolution order** (for TTS provider): `DEFAULT_TTS_PROVIDER` env var > `ttsProvider` user preference > `"gcp-hd"`
+
+**Resolution order** (for TTS voice): `DEFAULT_TTS_VOICE` env var > `ttsVoice` user preference
+
+**Resolution order** (for TTS language): `DEFAULT_TTS_LANGUAGE` env var > `ttsLanguage` user preference > `"ko-KR"`
+
 ## MCP Server
 
-SlideForge runs as an **MCP server** where the connected LLM agent (Claude, GPT, etc.) **is the brain**. The agent does all creative work — research, planning, copywriting, design, HTML coding — and the server handles only non-AI operations: validation, file I/O, and PNG rendering.
+SlideAgile runs as an **MCP server** where the connected LLM agent (Claude, GPT, etc.) **is the brain**. The agent does all creative work — research, planning, copywriting, design, HTML coding — and the server handles only non-AI operations: validation, file I/O, and PNG rendering.
 
 ### Transport Modes
 
@@ -93,10 +107,10 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "slideforge": {
+    "slideagile": {
       "command": "bun",
       "args": ["src/mcp-server.ts"],
-      "cwd": "/path/to/slideforge"
+      "cwd": "/path/to/slideagile"
     }
   }
 }
@@ -109,10 +123,10 @@ Add to `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "slideforge": {
+    "slideagile": {
       "command": "bun",
       "args": ["src/mcp-server.ts"],
-      "cwd": "/path/to/slideforge"
+      "cwd": "/path/to/slideagile"
     }
   }
 }
@@ -166,14 +180,14 @@ bun run mcp --transport sse --port 8080
 
 | Resource | Description |
 |---|---|
-| `slideforge://patterns` | Layout pattern catalog (JSON) |
-| `slideforge://design-tokens` | CSS custom properties |
-| `slideforge://base-styles` | Base CSS reset and utilities |
-| `slideforge://pattern-list` | Compact pattern list for prompts |
+| `slideagile://patterns` | Layout pattern catalog (JSON) |
+| `slideagile://design-tokens` | CSS custom properties |
+| `slideagile://base-styles` | Base CSS reset and utilities |
+| `slideagile://pattern-list` | Compact pattern list for prompts |
 
 ## CLI Reference
 
-The CLI provides template re-rendering and theme/template management.
+The CLI provides template re-rendering, theme/template management, and video rendering with optional TTS narration.
 
 ### `generate`
 
@@ -184,10 +198,11 @@ Apply copy.json to existing HTML slide templates and export PNGs.
 | `--template <dir>` | **(required)** Source directory with `slides/` templates |
 | `--rerender <file>` | **(required)** Path to copy.json to apply |
 | `-t, --theme <name>` | Theme name |
+| `-a, --author <name>` | Bottom-bar author/brand text override for this run |
 | `-o, --output <dir>` | Output directory |
 
 ```bash
-bun start generate --template ./output/2026-03-04_topic --rerender new-copy.json
+slideagile generate --template ./output/2026-03-04_topic --rerender new-copy.json --author @좋습좋생
 ```
 
 ### `theme list` / `theme create <name>`
@@ -200,7 +215,53 @@ List or save slide templates for reuse.
 
 ### `config set <key> <value>` / `config get <key>` / `config list` / `config unset <key>`
 
-Manage persistent user preferences. Valid keys: `theme`, `author`, `slides`, `output`.
+Manage persistent user preferences. Valid keys: `theme`, `author`, `slides`, `output`, `ttsProvider`, `ttsVoice`, `ttsLanguage`.
+
+### `video build`
+
+Build an MP4 video from rendered slide PNG files (`slide-XX.png`).
+
+SlideAgile bundles FFmpeg via `ffmpeg-static` by default. Use `--ffmpeg` or `FFMPEG_PATH` to override.
+Current local narration implementation supports `gcp-hd`.
+When `--tts` is enabled, SlideAgile generates per-slide narration segments and keeps audio in sync with each slide.
+
+| Option | Description |
+|---|---|
+| `--input <dir>` | **(required)** Output directory containing `slides/` or the `slides/` directory itself |
+| `--out <file>` | Optional output MP4 path. Default: `deck.mp4` in the output directory (or parent of `slides/` if `--input` points to `slides/`) |
+| `--seconds-per-slide <n>` | Time per slide in seconds (default: `4`) |
+| `--fps <n>` | Output FPS (default: `30`) |
+| `--ffmpeg <path>` | Optional path to `ffmpeg` executable |
+| `--tts` | Enable narration via configured TTS provider |
+| `--tts-provider <name>` | Override provider for this run (`gcp-hd` or `openai`) |
+| `--tts-voice <id>` | Override voice for this run (provider-specific ID) |
+| `--tts-language <code>` | Narration language code (default: `ko-KR`) |
+| `--script-file <file>` | Per-slide narration script JSON (recommended for presenter-style voiceover) |
+
+```bash
+slideagile video build --input ./output/2026-03-07_20-00-41_디지털-디톡스
+
+# With local GCP HD narration
+slideagile video build --input ./output/2026-03-07_20-00-41_디지털-디톡스 --tts --tts-provider gcp-hd --tts-language ko-KR
+
+# With presenter script (recommended)
+slideagile video build --input ./output/2026-03-07_20-00-41_디지털-디톡스 --tts --tts-provider gcp-hd --tts-language ko-KR --script-file ./output/2026-03-07_20-00-41_디지털-디톡스/narration-script.json
+```
+
+Presenter-style narration is best supplied through a dedicated script file instead of raw slide text.
+If `--script-file` is omitted, SlideAgile looks for `narration-script.json` in the output directory, then falls back to `copy.json`.
+To keep narration tied to each page, SlideAgile automatically anchors script lines to slide key text (heading/subheading) when needed.
+
+`narration-script.json` format:
+
+```json
+{
+  "slides": [
+    { "slideNumber": 1, "script": "오늘은 디지털 디톡스가 왜 필요한지 이야기해볼게요." },
+    { "slideNumber": 2, "script": "먼저 우리가 얼마나 자주 화면을 확인하는지부터 볼까요?" }
+  ]
+}
+```
 
 ## Architecture
 

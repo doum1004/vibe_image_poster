@@ -13,10 +13,12 @@ import {
   writeOutputFile,
 } from "../utils/file.js";
 import { log } from "../utils/logger.js";
+import { getPreference } from "../utils/preferences.js";
 
 export interface GenerateOptions {
   theme?: string;
   output?: string;
+  author?: string;
   template: string;
   rerender: string;
 }
@@ -39,7 +41,7 @@ async function templateRerender(
   copyFile: string,
   options: GenerateOptions,
 ): Promise<void> {
-  log.banner("SlideForge: Apply copy to templates");
+  log.banner("SlideAgile: Apply copy to templates");
   log.info(`Source templates: ${templateDir}`);
   log.divider();
 
@@ -77,7 +79,8 @@ async function templateRerender(
   await copySourceArtifacts(templateDir, newOutputDir);
 
   log.step("Applying copy data to HTML templates");
-  const updatedSlides = await reRenderAllSlides(newSlidesDir, copyOutput);
+  const author = options.author || process.env.DEFAULT_AUTHOR || getPreference("author") || "@SlideForge";
+  const updatedSlides = await reRenderAllSlides(newSlidesDir, copyOutput, { author });
 
   await writeJsonFile(join(newOutputDir, "copy.json"), copyOutput);
 

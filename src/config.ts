@@ -1,9 +1,13 @@
 import { z } from "zod";
+import { TTS_PROVIDERS } from "./utils/preferences.js";
 
 const ConfigSchema = z.object({
   chromePath: z.string().optional(),
   defaultTheme: z.string().optional(),
   defaultAuthor: z.string().optional(),
+  defaultTtsProvider: z.enum(TTS_PROVIDERS).optional(),
+  defaultTtsVoice: z.string().optional(),
+  defaultTtsLanguage: z.string().optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -17,6 +21,9 @@ export function loadConfig(): Config {
     chromePath: process.env.CHROME_PATH || undefined,
     defaultTheme: process.env.DEFAULT_THEME || undefined,
     defaultAuthor: process.env.DEFAULT_AUTHOR || undefined,
+    defaultTtsProvider: process.env.DEFAULT_TTS_PROVIDER || undefined,
+    defaultTtsVoice: process.env.DEFAULT_TTS_VOICE || undefined,
+    defaultTtsLanguage: process.env.DEFAULT_TTS_LANGUAGE || undefined,
   };
 
   const result = ConfigSchema.safeParse(raw);

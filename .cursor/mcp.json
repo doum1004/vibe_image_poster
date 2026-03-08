@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "slideforge": {
+    "slideagile": {
       "command": "bun",
       "args": ["run", "C:\\Workspace\\Personal\\vibe_image_poster\\src\\mcp-server.ts"]
     }

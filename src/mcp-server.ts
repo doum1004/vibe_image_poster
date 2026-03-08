@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * MCP server that exposes SlideForge as tools for external LLM agents.
+ * MCP server that exposes SlideAgile as tools for external LLM agents.
  *
  * Key design: The connected LLM agent **is** the brain. It does all the
  * creative work (research, planning, copywriting, design decisions, HTML coding).
@@ -52,7 +52,7 @@ function resolveAuthor(): string {
 }
 
 const server = new McpServer(
-  { name: "slideforge", version: "0.1.0" },
+  { name: "slideagile", version: "0.1.0" },
   { capabilities: { tools: {}, resources: {}, prompts: {} } },
 );
 
@@ -74,7 +74,7 @@ server.registerPrompt(
         role: "user",
         content: {
           type: "text",
-          text: `# SlideForge Card News Pipeline
+          text: `# SlideAgile Card News Pipeline
 
 You are generating Instagram card news (1080×1440px slides). Follow these 8 stages in order.
 Each stage produces JSON that feeds into the next. Use the tools to save, validate, and render.
@@ -95,7 +95,7 @@ Rules: Use Korean (한국어). Max 2 accent highlights per slide. Max 1 <strong>
 
 ## Stage 4: Design
 Select layout patterns and color palette.
-Use the get_pattern_catalog tool or the slideforge://patterns resource for available patterns.
+Use the get_pattern_catalog tool or the slideagile://patterns resource for available patterns.
 Schema: { theme, colorPalette: {primary, secondary, accent, background, text}, slides: [{slideNumber, layoutPattern, primaryColor?, secondaryColor?, backgroundColor?, notes?}] }
 Rules: No same pattern on consecutive slides. Cover→intro-cover, CTA→intro-cta.
 
@@ -285,7 +285,7 @@ You are reviewing card news slides for quality. Check every slide against these 
 
 server.registerResource(
   "pattern_catalog",
-  "slideforge://patterns",
+  "slideagile://patterns",
   {
     description: "All 28 layout patterns with IDs, categories, and structure hints.",
     mimeType: "application/json",
@@ -293,7 +293,7 @@ server.registerResource(
   async () => ({
     contents: [
       {
-        uri: "slideforge://patterns",
+        uri: "slideagile://patterns",
         mimeType: "application/json",
         text: JSON.stringify(PATTERN_CATALOG, null, 2),
       },
@@ -303,36 +303,36 @@ server.registerResource(
 
 server.registerResource(
   "design_tokens",
-  "slideforge://design-tokens",
+  "slideagile://design-tokens",
   { description: "CSS custom properties (design tokens) for slides.", mimeType: "text/css" },
   async () => {
     const css = await readTextFile(resolveFromSrc("design-system", "shared", "design-tokens.css"));
     return {
-      contents: [{ uri: "slideforge://design-tokens", mimeType: "text/css", text: css }],
+      contents: [{ uri: "slideagile://design-tokens", mimeType: "text/css", text: css }],
     };
   },
 );
 
 server.registerResource(
   "base_styles",
-  "slideforge://base-styles",
+  "slideagile://base-styles",
   { description: "Base CSS reset and utility classes for slides.", mimeType: "text/css" },
   async () => {
     const css = await readTextFile(resolveFromSrc("design-system", "shared", "base-styles.css"));
     return {
-      contents: [{ uri: "slideforge://base-styles", mimeType: "text/css", text: css }],
+      contents: [{ uri: "slideagile://base-styles", mimeType: "text/css", text: css }],
     };
   },
 );
 
 server.registerResource(
   "pattern_list_for_prompt",
-  "slideforge://pattern-list",
+  "slideagile://pattern-list",
   { description: "Compact pattern list formatted for AI prompts.", mimeType: "text/plain" },
   async () => ({
     contents: [
       {
-        uri: "slideforge://pattern-list",
+        uri: "slideagile://pattern-list",
         mimeType: "text/plain",
         text: getPatternListForPrompt(),
       },
@@ -1139,7 +1139,7 @@ type ServerRuntimeOptions = {
 };
 
 function printUsage() {
-  console.error(`Usage: slideforge-mcp [options]
+  console.error(`Usage: slideagile-mcp [options]
 
 Options:
   --transport <stdio|http|sse>  MCP transport mode (default: stdio)
@@ -1266,7 +1266,7 @@ async function startStreamableHttpTransport(opts: ServerRuntimeOptions) {
 
   await listenHttpServer(httpServer, opts.host, opts.port);
   console.error(
-    `SlideForge MCP listening on http://${opts.host}:${opts.port}${opts.mcpPath} (streamable HTTP)`,
+    `SlideAgile MCP listening on http://${opts.host}:${opts.port}${opts.mcpPath} (streamable HTTP)`,
   );
 }
 
@@ -1337,7 +1337,7 @@ async function startLegacySseTransport(opts: ServerRuntimeOptions) {
 
   await listenHttpServer(httpServer, opts.host, opts.port);
   console.error(
-    `SlideForge MCP listening on http://${opts.host}:${opts.port}${opts.ssePath} + ${opts.messagesPath} (legacy SSE)`,
+    `SlideAgile MCP listening on http://${opts.host}:${opts.port}${opts.ssePath} + ${opts.messagesPath} (legacy SSE)`,
   );
 }
 

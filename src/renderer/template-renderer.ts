@@ -100,6 +100,14 @@ export function renderTemplateWithCopy(htmlTemplate: string, slideCopy: SlideCop
   return result;
 }
 
+function replaceBottomBarAuthor(html: string, author: string): string {
+  // Replace existing text inside .bottom-bar while keeping element/attributes intact.
+  const pattern = /(<[^>]*class="[^"]*\bbottom-bar\b[^"]*"[^>]*>)([\s\S]*?)(<\/[^>]+>)/gi;
+  return html.replace(pattern, (_match, openTag, _oldContent, closeTag) => {
+    return `${openTag}${escapeHtml(author)}${closeTag}`;
+  });
+}
+
 /**
  * Check if an HTML file contains data-bind attributes.
  */
@@ -117,6 +125,7 @@ export function hasDataBindings(html: string): boolean {
 export async function reRenderAllSlides(
   slidesDir: string,
   copyOutput: CopyOutput,
+  options?: { author?: string },
 ): Promise<Map<number, string>> {
   const updatedSlides = new Map<number, string>();
 
@@ -163,7 +172,10 @@ export async function reRenderAllSlides(
       continue;
     }
 
-    const updated = renderTemplateWithCopy(html, slideCopy);
+    let updated = renderTemplateWithCopy(html, slideCopy);
+    if (options?.author) {
+      updated = replaceBottomBarAuthor(updated, options.author);
+    }
     updatedSlides.set(slideNumber, updated);
 
     // Write updated HTML back to disk

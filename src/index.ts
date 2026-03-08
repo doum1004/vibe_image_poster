@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { generate } from "./commands/generate.js";
 import { createTheme, listThemes } from "./commands/theme.js";
 import { addTemplate, listTemplates } from "./commands/template.js";
+import { buildVideo } from "./commands/video.js";
 import { loadConfig } from "./config.js";
 import { log } from "./utils/logger.js";
 import {
@@ -12,12 +13,13 @@ import {
   PREFERENCE_KEYS,
   removePreference,
   setPreference,
+  TTS_PROVIDERS,
 } from "./utils/preferences.js";
 
 const program = new Command();
 
 program
-  .name("slideforge")
+  .name("slideagile")
   .description(
     "Generate Instagram card news (1080x1440px). " +
       "Use as an MCP server (recommended) or CLI for template re-rendering.",
@@ -33,11 +35,13 @@ program
     "Path to copy.json to apply to templates",
   )
   .option("-t, --theme <name>", "Theme to use")
+  .option("-a, --author <name>", "Bottom-bar author/brand text")
   .option("-o, --output <dir>", "Output directory")
   .action(async (opts) => {
     try {
       const config = loadConfig();
       opts.theme = opts.theme || config.defaultTheme || getPreference("theme") || "default";
+      opts.author = opts.author || config.defaultAuthor || getPreference("author") || "@SlideForge";
 
       await generate(opts);
     } catch (err) {
@@ -81,6 +85,57 @@ program
       }),
   );
 
+program
+  .command("video")
+  .description("Build MP4 video from slide PNG files")
+  .addCommand(
+    new Command("build")
+      .description("Create a deck.mp4 from slide-XX.png files")
+      .requiredOption(
+        "--input <dir>",
+        "Output directory containing slides/ or the slides/ directory itself",
+      )
+      .option("--out <file>", "Output video path (default: <input>/deck.mp4)")
+      .option("--seconds-per-slide <n>", "Seconds each slide stays on screen", parseFloat, 4)
+      .option("--fps <n>", "Output frame rate", (value) => parseInt(value, 10), 30)
+      .option("--ffmpeg <path>", "Path to ffmpeg executable")
+      .option("--tts", "Enable narration from copy.json")
+      .option(
+        "--tts-provider <name>",
+        `TTS provider (${TTS_PROVIDERS.join(", ")})`,
+      )
+      .option("--tts-voice <id>", "TTS voice ID (provider-specific)")
+      .option("--tts-language <code>", "TTS language code (default: ko-KR)")
+      .option("--script-file <file>", "Path to narration script JSON (per-slide presenter script)")
+      .action(async (opts) => {
+        try {
+          if (
+            opts.ttsProvider &&
+            !TTS_PROVIDERS.includes(opts.ttsProvider as (typeof TTS_PROVIDERS)[number])
+          ) {
+            log.error(`ttsProvider must be one of: ${TTS_PROVIDERS.join(", ")}`);
+            process.exit(1);
+          }
+
+          await buildVideo({
+            input: opts.input,
+            out: opts.out,
+            secondsPerSlide: opts.secondsPerSlide,
+            fps: opts.fps,
+            ffmpegPath: opts.ffmpeg,
+            tts: opts.tts,
+            ttsProvider: opts.ttsProvider,
+            ttsVoice: opts.ttsVoice,
+            ttsLanguage: opts.ttsLanguage,
+            scriptFile: opts.scriptFile,
+          });
+        } catch (err) {
+          log.error("Video build failed", err instanceof Error ? err : undefined);
+          process.exit(1);
+        }
+      }),
+  );
+
 // ─── Config / Preferences ───────────────────────────────────────────────
 
 const configCmd = program
@@ -107,6 +162,24 @@ configCmd
         process.exit(1);
       }
       setPreference(typedKey, num);
+    } else if (typedKey === "ttsProvider") {
+      if (!TTS_PROVIDERS.includes(value as (typeof TTS_PROVIDERS)[number])) {
+        log.error(`ttsProvider must be one of: ${TTS_PROVIDERS.join(", ")}`);
+        process.exit(1);
+      }
+      setPreference(typedKey, value as (typeof TTS_PROVIDERS)[number]);
+    } else if (typedKey === "ttsVoice") {
+      if (value.trim().length === 0) {
+        log.error("ttsVoice cannot be empty.");
+        process.exit(1);
+      }
+      setPreference(typedKey, value);
+    } else if (typedKey === "ttsLanguage") {
+      if (!/^[a-z]{2}-[A-Z]{2}$/.test(value.trim())) {
+        log.error('ttsLanguage must look like "ko-KR" or "en-US".');
+        process.exit(1);
+      }
+      setPreference(typedKey, value.trim());
     } else {
       setPreference(typedKey, value);
     }
@@ -125,8 +198,23 @@ configCmd
       process.exit(1);
     }
 
-    const value = getPreference(key as keyof import("./utils/preferences.js").UserPreferences);
+    const typedKey = key as keyof import("./utils/preferences.js").UserPreferences;
+    const value = getPreference(typedKey);
+    const config = loadConfig();
+
     if (value === undefined) {
+      if (typedKey === "ttsProvider") {
+        log.info(`${key}: ${config.defaultTtsProvider ?? "gcp-hd"} (default)`);
+        return;
+      }
+      if (typedKey === "ttsVoice" && config.defaultTtsVoice) {
+        log.info(`${key}: ${config.defaultTtsVoice} (default)`);
+        return;
+      }
+      if (typedKey === "ttsLanguage") {
+        log.info(`${key}: ${config.defaultTtsLanguage ?? "ko-KR"} (default)`);
+        return;
+      }
       log.info(`${key}: (not set)`);
     } else {
       log.info(`${key}: ${value}`);
