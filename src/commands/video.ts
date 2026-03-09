@@ -1,5 +1,5 @@
-import { readdir, unlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { readdir, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import textToSpeech from "@google-cloud/text-to-speech";
 import ffmpegStatic from "ffmpeg-static";
@@ -96,6 +96,8 @@ export async function buildVideo(opts: VideoBuildOptions): Promise<void> {
       `TTS provider "${ttsSettings.provider}" is not implemented yet. Use "gcp-hd" for now.`,
     );
   }
+
+  await checkNarrationScript(outputDir, opts.scriptFile);
 
   const narrationBySlide = await loadNarrationBySlide(outputDir, opts.scriptFile);
   const tmpBase = join(outputDir, ".slideagile-video");
@@ -208,12 +210,16 @@ async function resolvePaths(
     throw new Error(`slides directory not found: ${slidesDir}`);
   }
 
-  const outputPath = out ? resolve(out) : join(looksLikeSlidesDir ? dirname(slidesDir) : resolvedInput, "deck.mp4");
+  const outputPath = out
+    ? resolve(out)
+    : join(looksLikeSlidesDir ? dirname(slidesDir) : resolvedInput, "deck.mp4");
   const outputDir = dirname(outputPath);
   return { slidesDir, outputPath, outputDir };
 }
 
-async function listSlidePngs(slidesDir: string): Promise<Array<{ slideNumber: number; pngPath: string }>> {
+async function listSlidePngs(
+  slidesDir: string,
+): Promise<Array<{ slideNumber: number; pngPath: string }>> {
   const files = await readdir(slidesDir);
   const pngFiles = files.filter((f) => /^slide-\d+\.png$/.test(f)).sort();
   if (pngFiles.length === 0) {
@@ -231,11 +237,7 @@ async function runFfmpeg(command: string, args: string[]): Promise<void> {
 
     child.on("error", (err) => {
       if ("code" in err && err.code === "ENOENT") {
-        rejectPromise(
-          new Error(
-            "ffmpeg not found. Provide --ffmpeg <path> or set FFMPEG_PATH.",
-          ),
-        );
+        rejectPromise(new Error("ffmpeg not found. Provide --ffmpeg <path> or set FFMPEG_PATH."));
         return;
       }
       rejectPromise(err);
@@ -264,26 +266,19 @@ function resolveFfmpegPath(cliPath?: string): string {
   return "ffmpeg";
 }
 
-function resolveTtsSettings(
-  opts: VideoBuildOptions,
-): { provider: TtsProvider; voice?: string; language: string } {
+function resolveTtsSettings(opts: VideoBuildOptions): {
+  provider: TtsProvider;
+  voice?: string;
+  language: string;
+} {
   const config = loadConfig();
   const provider =
-    opts.ttsProvider ??
-    config.defaultTtsProvider ??
-    getPreference("ttsProvider") ??
-    "gcp-hd";
+    opts.ttsProvider ?? config.defaultTtsProvider ?? getPreference("ttsProvider") ?? "gcp-hd";
 
-  const voice =
-    opts.ttsVoice ??
-    config.defaultTtsVoice ??
-    getPreference("ttsVoice");
+  const voice = opts.ttsVoice ?? config.defaultTtsVoice ?? getPreference("ttsVoice");
 
   const language =
-    opts.ttsLanguage ??
-    config.defaultTtsLanguage ??
-    getPreference("ttsLanguage") ??
-    "ko-KR";
+    opts.ttsLanguage ?? config.defaultTtsLanguage ?? getPreference("ttsLanguage") ?? "ko-KR";
 
   return { provider, voice, language };
 }
@@ -327,17 +322,69 @@ function buildSlideNarrationFromCopy(
 ): string | null {
   if (!slide) return null;
 
-  const lines = [
-    slide.heading,
-    slide.subheading,
-    slide.bodyText,
-    ...(slide.bulletPoints ?? []),
-    slide.accentText,
-    slide.ctaText,
-  ].filter((v): v is string => Boolean(v && v.trim().length > 0));
+  const role = slide.role ?? "body";
+  const parts: string[] = [];
 
-  if (lines.length === 0) return null;
-  return lines.join(". ");
+  const cleanHeading = removeEmojis(slide.heading?.trim() ?? "");
+  const cleanSubheading = removeEmojis(slide.subheading?.trim() ?? "");
+  const cleanBodyText = removeEmojis(slide.bodyText?.trim() ?? "");
+  const cleanAccentText = removeEmojis(slide.accentText?.trim() ?? "");
+  const cleanCtaText = removeEmojis(slide.ctaText?.trim() ?? "");
+  const cleanedBulletPoints = (slide.bulletPoints ?? []).map((bp) =>
+    removeEmojis(cleanupBulletPoint(bp)),
+  );
+
+  if (role === "cover") {
+    if (cleanHeading) parts.push(cleanHeading);
+    if (cleanSubheading) parts.push(cleanSubheading);
+    if (cleanAccentText) parts.push(cleanAccentText);
+  } else if (role === "cta") {
+    if (cleanHeading) parts.push(cleanHeading);
+    if (cleanBodyText) parts.push(cleanBodyText);
+    if (cleanCtaText) parts.push(cleanCtaText);
+  } else {
+    if (cleanHeading) parts.push(cleanHeading);
+    if (cleanSubheading) parts.push(cleanSubheading);
+    if (cleanBodyText) parts.push(cleanBodyText);
+
+    if (cleanedBulletPoints.length > 0) {
+      const bulletIntro = getBulletIntro(cleanedBulletPoints.length);
+      parts.push(bulletIntro);
+
+      for (let i = 0; i < cleanedBulletPoints.length; i++) {
+        const num = i + 1;
+        const bp = cleanedBulletPoints[i];
+        const cleanBp = bp.replace(/^[0-9]+[.)]\s*/, "").trim();
+        parts.push(`${num}. ${cleanBp}`);
+      }
+    }
+
+    if (cleanAccentText) parts.push(cleanAccentText);
+  }
+
+  const result = parts.filter((p) => p.length > 0).join(". ");
+  return result.length > 0 ? result : null;
+}
+
+function removeEmojis(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanupBulletPoint(bullet: string): string {
+  return bullet
+    .replace(/^[\s\d\-\u{2022}\u{2023}\u{25E6}\u{2043}\u{2219}]+/u, "")
+    .replace(/[—–-]\s*/, ". ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getBulletIntro(count: number): string {
+  if (count <= 2) return "두 가지 방법.";
+  if (count <= 4) return "여러 가지 방법.";
+  return "다양한 방법.";
 }
 
 async function loadNarrationBySlide(
@@ -433,4 +480,17 @@ async function synthesizeGcpNarration(
   }
 
   await writeFile(outputPath, Buffer.from(audio));
+}
+
+async function checkNarrationScript(outputDir: string, explicitScriptFile?: string): Promise<void> {
+  const explicitPath = explicitScriptFile ? resolve(explicitScriptFile) : null;
+  const defaultPath = join(outputDir, "narration-script.json");
+  const resolvedPath = explicitPath || ((await fileExists(defaultPath)) ? defaultPath : null);
+
+  if (resolvedPath) {
+    log.info(`Narration script: ${resolvedPath}`);
+    return;
+  }
+
+  log.warn("No narration-script.json found - using auto-generated script from copy.json");
 }
