@@ -25,10 +25,6 @@ program
   .description(`
 Generate short-form card news (default 1080x1920 vertical slides).
 
-USAGE MODES:
-  1. MCP Server (recommended): Run as a server for AI agents to generate slides programmatically
-  2. CLI: Use directly for template re-rendering, video building, and theme management
-
 QUICK START:
   slideagile generate --template <dir> --rerender copy.json
   slideagile video build --input ./output
@@ -146,24 +142,56 @@ EXAMPLES:
   # High quality output with custom format
   slideagile video build --input ./slides --format 1080p --fps 60
 
-  # Video with TTS narration using default provider
+  # Video with TTS narration (auto-generated from copy.json)
   slideagile video build --input ./output --tts
 
   # Video with TTS using specific provider and voice
-  slideagile video build --input ./output --tts --tts-provider openai --tts-voice alloy
+  slideagile video build --input ./output --tts --tts-provider gcp-hd --tts-voice en-US-Neural2-J
 
-  # TTS with custom language and script
-  slideagile video build --input ./output --tts --tts-language en-US --script-file ./script.json
+  # TTS with custom narration script
+  slideagile video build --input ./output --tts --script-file ./narration-script.json
 
 NOTES:
-  - Requires ffmpeg installed and in PATH (or use --ffmpeg to specify path)
-  - copy.json must contain 'audio' field for each slide when using --tts
-  - --script-file provides per-slide narration timing (overrides auto-generated)
+  - Requires ffmpeg installed in PATH (or use --ffmpeg to specify path)
   - Output format options: ` +
   VIDEO_FORMATS.join(", ") +
   `
   - TTS providers: ` +
   TTS_PROVIDERS.join(", ") + `
+
+SCRIPT RESOLUTION ORDER:
+  1. --script-file <path>        (explicitly provided)
+  2. <output-dir>/narration-script.json
+  3. Auto-generated from copy.json content (fallback)
+
+NARRATION SCRIPT FORMAT:
+  {
+    "slides": [
+      { "slideNumber": 1, "script": "Welcome! Today we're exploring..." },
+      { "slideNumber": 2, "script": "Let's start with the first key point..." },
+      { "slideNumber": 3, "script": "Now, here's what this means for you..." }
+    ]
+  }
+
+SCRIPT BEST PRACTICES (for natural-sounding TTS):
+  - Write conversationally - speak TO the viewer, don't just read the slide
+  - Use short, declarative sentences (TTS handles pauses better)
+  - Add verbal transitions: "Now let's move on to...", "Building on that idea..."
+  - Include markers: "First...", "Second...", "Finally..." to guide the listener
+  - Keep pacing: ~25-30 words per 4-second slide is comfortable
+  - AVOID: Emojis, complex punctuation, jargon, abbreviations (use "for example" not "e.g.")
+
+EXAMPLE NARRAION SCRIPT (3-slide presentation):
+  Slide 1 (Cover): "Welcome! In this quick presentation, we'll explore three
+    powerful strategies for boosting your daily productivity."
+  Slide 2 (Body):   "First, time blocking. Instead of reacting to whatever
+    comes up, you proactively reserve chunks of time for deep work.
+    Second, the two-minute rule. If something takes less than two minutes,
+    do it immediately. Third, energy management. Work when you're most
+    alert, rest when you're not."
+  Slide 3 (CTA):    "So try implementing one of these techniques today.
+    Start small, track your progress, and watch your productivity soar.
+    Thanks for watching!"
 
 SEE ALSO:
   slideagile generate       Generate PNG slides first
@@ -216,11 +244,11 @@ program
   .command("video")
   .description("Build MP4 video from slide PNG files")
   .summary("Create video from PNG slides with optional TTS narration")
-  .addHelpText("after", VIDEO_BUILD_EXAMPLES)
   .addCommand(
     new Command("build")
       .description("Create a deck.mp4 from slide-XX.png files")
       .summary("Build MP4 video from slides")
+      .addHelpText("after", VIDEO_BUILD_EXAMPLES)
       .requiredOption(
         "--input <dir>",
         "Output directory containing slides/ subdirectory, or the slides/ directory itself",
@@ -251,11 +279,12 @@ program
       )
       .option(
         "--tts",
-        "Enable text-to-speech narration from copy.json audio field",
+        "Enable text-to-speech narration. Uses custom script (--script-file), " +
+          "narration-script.json in output dir, or auto-generates from copy.json",
       )
       .option(
         "--tts-provider <name>",
-        `TTS provider (${TTS_PROVIDERS.join(", ")}, default: gcp-hd)`,
+        "TTS provider (" + TTS_PROVIDERS.join(", ") + ", default: gcp-hd)",
       )
       .option(
         "--tts-voice <id>",
@@ -267,7 +296,8 @@ program
       )
       .option(
         "--script-file <file>",
-        "Path to narration script JSON with per-slide timing overrides",
+        "Path to narration-script.json with per-slide scripts for natural-sounding TTS. " +
+          "See help for format and best practices.",
       )
       .action(async (opts) => {
         try {
